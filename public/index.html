@@ -1,0 +1,1073 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Delicias del Rey</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Pacifico&family=Barlow+Condensed:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="/css/style.css?v=29"/>
+</head>
+<body>
+
+<!-- TERMINAL SELECTION SCREEN -->
+<div id="terminal-screen" style="display:none">
+  <div class="terminal-screen-inner">
+    <div class="terminal-logo">
+      <span class="terminal-logo-icon">👑</span>
+      <h1 id="terminal-biz-name">Delicias del Rey</h1>
+      <p>Selecciona tu punto de venta</p>
+    </div>
+    <div class="terminal-grid" id="terminal-grid"></div>
+  </div>
+</div>
+
+<!-- USER SELECTION SCREEN -->
+<div id="user-screen" style="display:none">
+  <div class="terminal-screen-inner">
+    <div class="terminal-logo">
+      <span class="terminal-logo-icon">👤</span>
+      <h1>¿Quién eres?</h1>
+      <p>Selecciona tu perfil</p>
+    </div>
+    <div class="terminal-grid">
+      <div class="terminal-card" onclick="selectUser('admin')">
+        <span class="terminal-card-dot" style="background:#FC4C02"></span>
+        <span class="terminal-card-icon">👑</span>
+        <div class="terminal-card-name">Administrativo</div>
+      </div>
+      <div class="terminal-card" onclick="selectUser('worker')">
+        <span class="terminal-card-dot" style="background:#3b82f6"></span>
+        <span class="terminal-card-icon">👷</span>
+        <div class="terminal-card-name">Trabajador</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- PIN SCREEN -->
+<div id="pin-screen" style="display:none">
+  <div class="terminal-screen-inner" style="max-width:340px">
+    <div class="terminal-logo">
+      <span class="terminal-logo-icon" id="pin-role-icon">👑</span>
+      <h1 id="pin-role-name">Administrativo</h1>
+      <p>Ingresa tu contraseña</p>
+    </div>
+    <div id="pin-dots" style="display:flex;justify-content:center;gap:14px;margin-bottom:28px">
+      <span class="pin-dot" id="pin-d0"></span>
+      <span class="pin-dot" id="pin-d1"></span>
+      <span class="pin-dot" id="pin-d2"></span>
+      <span class="pin-dot" id="pin-d3"></span>
+    </div>
+    <p id="pin-error" style="color:#ef4444;font-size:13px;text-align:center;min-height:18px;margin:-12px 0 12px"></p>
+    <div class="pin-pad">
+      <button class="pin-key" onclick="pinKey('1')">1</button>
+      <button class="pin-key" onclick="pinKey('2')">2</button>
+      <button class="pin-key" onclick="pinKey('3')">3</button>
+      <button class="pin-key" onclick="pinKey('4')">4</button>
+      <button class="pin-key" onclick="pinKey('5')">5</button>
+      <button class="pin-key" onclick="pinKey('6')">6</button>
+      <button class="pin-key" onclick="pinKey('7')">7</button>
+      <button class="pin-key" onclick="pinKey('8')">8</button>
+      <button class="pin-key" onclick="pinKey('9')">9</button>
+      <button class="pin-key pin-key-back" onclick="pinBack()">←</button>
+      <button class="pin-key" onclick="pinKey('0')">0</button>
+      <button class="pin-key pin-key-ok" onclick="pinConfirm()">✓</button>
+    </div>
+    <button onclick="volverAUsuarios()" style="margin-top:20px;background:none;border:none;color:#94a3b8;cursor:pointer;font-size:13px">← Volver</button>
+  </div>
+</div>
+
+<!-- MONTH SELECTOR SCREEN -->
+<div id="month-selector-screen" style="display:none">
+  <div class="month-sel-inner">
+    <div class="month-sel-header">
+      <button class="month-sel-back" onclick="closeMonthSelector()">← Volver</button>
+      <div class="month-sel-title">
+        <span class="month-sel-icon">📒</span>
+        <div>
+          <div class="month-sel-heading">Contabilidad</div>
+          <div class="month-sel-sub">Selecciona el mes a revisar</div>
+        </div>
+      </div>
+    </div>
+    <div id="month-sel-grid" class="month-sel-grid"></div>
+  </div>
+</div>
+
+<!-- ACCOUNTING SCREEN -->
+<div id="accounting-screen" style="display:none">
+  <!-- ACC SIDEBAR -->
+  <nav class="acc-sidebar">
+    <div class="acc-sidebar-brand">
+      <span>📒</span>
+      <span>Contabilidad</span>
+    </div>
+    <ul class="acc-nav-list">
+      <li class="acc-nav-item active" id="acc-nav-dashboard" onclick="switchAccTab('dashboard')">
+        <span class="nav-icon">📊</span> Dashboard
+      </li>
+      <li class="acc-nav-item" id="acc-nav-ventas" onclick="switchAccTab('ventas')">
+        <span class="nav-icon">🧾</span> Ventas
+      </li>
+      <li class="acc-nav-item" id="acc-nav-asientos" onclick="switchAccTab('asientos')">
+        <span class="nav-icon">📝</span> Asientos
+      </li>
+      <li class="acc-nav-item" id="acc-nav-mayor" onclick="switchAccTab('mayor')">
+        <span class="nav-icon">📚</span> Libro Mayor
+      </li>
+      <li class="acc-nav-item" id="acc-nav-edr" onclick="switchAccTab('edr')">
+        <span class="nav-icon">📈</span> Estado de Resultados
+      </li>
+    </ul>
+    <div class="acc-sidebar-footer">
+      <button class="acc-back-btn" onclick="closeAccountingApp()">← Volver al inicio</button>
+    </div>
+  </nav>
+
+  <!-- ACC MAIN -->
+  <div class="acc-main">
+    <div class="acc-main-header">
+      <h2 id="acc-main-title">Dashboard</h2>
+      <div class="acc-main-actions">
+        <input type="date" id="acc-from" class="input input-sm"/>
+        <span style="color:#64748b">a</span>
+        <input type="date" id="acc-to" class="input input-sm"/>
+        <button class="btn btn-outline btn-sm" onclick="loadAccountingTab()">Filtrar</button>
+        <button class="btn btn-primary btn-sm" id="btn-nuevo-asiento" onclick="openJournalModal()" style="display:none">+ Asiento</button>
+      </div>
+    </div>
+
+    <!-- Dashboard -->
+    <div id="acc-panel-dashboard" class="acc-panel">
+      <h3 style="color:#94a3b8;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;margin:0 0 12px">Operaciones del período</h3>
+      <div class="acc-dash-grid" style="margin-bottom:20px">
+        <div class="acc-stat-card">
+          <div class="acc-stat-label">Total Ventas</div>
+          <div class="acc-stat-value green" id="acc-dash-ventas">$0.00</div>
+          <div style="font-size:12px;color:#64748b;margin-top:4px" id="acc-dash-num-ventas">0 ventas</div>
+        </div>
+        <div class="acc-stat-card">
+          <div class="acc-stat-label">Total Egresos</div>
+          <div class="acc-stat-value red" id="acc-dash-egresos">$0.00</div>
+        </div>
+        <div class="acc-stat-card acc-stat-neta">
+          <div class="acc-stat-label">Dinero en Caja</div>
+          <div class="acc-stat-value" id="acc-dash-caja">$0.00</div>
+          <div style="font-size:11px;color:#94a3b8;margin-top:4px">Saldo acumulado</div>
+        </div>
+      </div>
+
+      <h3 style="color:#94a3b8;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;margin:0 0 12px">Contabilidad del período</h3>
+      <div class="acc-dash-grid">
+        <div class="acc-stat-card">
+          <div class="acc-stat-label">Ingresos Contables</div>
+          <div class="acc-stat-value green" id="acc-dash-ingresos">$0.00</div>
+        </div>
+        <div class="acc-stat-card">
+          <div class="acc-stat-label">Total Costos</div>
+          <div class="acc-stat-value red" id="acc-dash-costos">$0.00</div>
+        </div>
+        <div class="acc-stat-card">
+          <div class="acc-stat-label">Gastos Operativos</div>
+          <div class="acc-stat-value red" id="acc-dash-gastos-op">$0.00</div>
+        </div>
+        <div class="acc-stat-card">
+          <div class="acc-stat-label">Gastos Administrativos</div>
+          <div class="acc-stat-value red" id="acc-dash-gastos-admin">$0.00</div>
+        </div>
+        <div class="acc-stat-card">
+          <div class="acc-stat-label">Utilidad Bruta</div>
+          <div class="acc-stat-value" id="acc-dash-utilidad-bruta">$0.00</div>
+        </div>
+        <div class="acc-stat-card acc-stat-neta">
+          <div class="acc-stat-label">Utilidad Neta</div>
+          <div class="acc-stat-value" id="acc-dash-utilidad-neta">$0.00</div>
+        </div>
+      </div>
+      <div style="margin-top:24px">
+        <h3 style="color:#92603a;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;margin-bottom:12px">Últimos asientos</h3>
+        <div class="card" style="padding:0;overflow:hidden">
+          <table class="data-table" id="acc-dash-recent-table">
+            <thead><tr><th>Fecha</th><th>Cuenta</th><th>Descripción</th><th>Ingreso</th><th>Egreso</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Ventas por día -->
+    <div id="acc-panel-ventas" class="acc-panel" style="display:none">
+      <div class="card">
+        <table class="data-table" id="acc-ventas-table">
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th style="text-align:right">Efectivo</th>
+              <th style="text-align:right">Transferencia</th>
+              <th style="text-align:right">Total del Día</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+          <tfoot id="acc-ventas-tfoot"></tfoot>
+        </table>
+      </div>
+    </div>
+
+    <!-- Asientos -->
+    <div id="acc-panel-asientos" class="acc-panel" style="display:none">
+      <div class="card">
+        <table class="data-table" id="journal-table">
+          <thead>
+            <tr><th>Fecha</th><th>Cuenta</th><th>Descripción</th><th>Referencia</th><th>Ingreso</th><th>Egreso</th><th></th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Libro Mayor -->
+    <div id="acc-panel-mayor" class="acc-panel" style="display:none">
+      <div id="mayor-content"></div>
+    </div>
+
+    <!-- Estado de Resultados -->
+    <div id="acc-panel-edr" class="acc-panel" style="display:none">
+      <div id="edr-content"></div>
+    </div>
+  </div>
+</div>
+
+<!-- SIDEBAR -->
+<nav class="sidebar">
+  <div class="sidebar-brand">
+    <span class="brand-icon">👑</span>
+    <span class="brand-name">Delicias del Rey</span>
+  </div>
+  <ul class="nav-list">
+    <li class="nav-item active" data-page="dashboard" id="nav-dashboard">
+      <span class="nav-icon">📊</span> Dashboard
+    </li>
+    <li class="nav-item" data-page="pos">
+      <span class="nav-icon">🛒</span> Punto de Venta
+    </li>
+    <li class="nav-item" data-page="sales">
+      <span class="nav-icon">🧾</span> Ventas
+    </li>
+    <li class="nav-item" data-page="movements">
+      <span class="nav-icon">💰</span> Caja
+    </li>
+    <li class="nav-item" data-page="inventory">
+      <span class="nav-icon">📦</span> Inventario
+    </li>
+    <li class="nav-item" data-page="losses">
+      <span class="nav-icon">📉</span> Pérdidas
+    </li>
+  </ul>
+  <div class="sidebar-footer">
+    <button class="sidebar-settings-btn" id="btn-cambiar-terminal" onclick="cambiarTerminal()">🖥️ Cambiar terminal</button>
+    <button class="sidebar-settings-btn" id="btn-configuracion" onclick="openSettingsModal()">⚙️ Configuración</button>
+  </div>
+</nav>
+
+<!-- MAIN -->
+<main class="main-content">
+
+  <!-- ═══════════════ DASHBOARD ═══════════════ -->
+  <section id="page-dashboard" class="page active">
+    <div class="page-header">
+      <h1>Dashboard</h1>
+      <span class="date-badge" id="today-label"></span>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-card blue">
+        <div class="stat-label">Ventas hoy</div>
+        <div class="stat-value" id="dash-ventas">0</div>
+        <div class="stat-sub">tickets</div>
+      </div>
+      <div class="stat-card green">
+        <div class="stat-label">Total hoy</div>
+        <div class="stat-value" id="dash-total">$0</div>
+        <div class="stat-sub">en ventas</div>
+      </div>
+      <div class="stat-card teal">
+        <div class="stat-label">Ingresos</div>
+        <div class="stat-value" id="dash-ingreso">$0</div>
+        <div class="stat-sub">caja del día</div>
+      </div>
+      <div class="stat-card red">
+        <div class="stat-label">Egresos</div>
+        <div class="stat-value" id="dash-egreso">$0</div>
+        <div class="stat-sub">caja del día</div>
+      </div>
+      <div class="stat-card purple">
+        <div class="stat-label">Balance</div>
+        <div class="stat-value" id="dash-balance">$0</div>
+        <div class="stat-sub">neto del día</div>
+      </div>
+    </div>
+
+    <div class="dash-grid">
+      <div class="card">
+        <div class="card-title">Top productos (7 días)</div>
+        <table class="data-table" id="dash-top-table">
+          <thead><tr><th>Producto</th><th>Cantidad</th><th>Total</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="card">
+        <div class="card-title">Stock bajo</div>
+        <table class="data-table" id="dash-stock-table">
+          <thead><tr><th>Producto</th><th>Stock</th><th>Mínimo</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ POS ═══════════════ -->
+  <section id="page-pos" class="page">
+    <!-- Bloqueo de caja cerrada -->
+    <div id="pos-lock" class="pos-lock" style="display:none">
+      <div class="pos-lock-content">
+        <div class="pos-lock-icon">🔒</div>
+        <h2>Punto de venta bloqueado</h2>
+        <p>Debes abrir la caja antes de realizar ventas.</p>
+        <button class="btn btn-primary" onclick="irAbrirCaja()">Abrir caja ahora</button>
+      </div>
+    </div>
+    <div id="pos-content" class="pos-layout">
+
+      <!-- ── ÁREA SUPERIOR: carrito + productos ── -->
+      <div class="pos-top">
+
+        <!-- CARRITO (izquierda) -->
+        <div class="pos-cart">
+          <div class="cart-items" id="cart-items">
+            <div class="cart-empty-state">
+              <div class="cart-empty-icon">🛒</div>
+              <p>Comience a añadir productos</p>
+            </div>
+          </div>
+          <div class="cart-pay-panel" id="cart-pay-panel" style="display:none">
+            <div class="cart-total-row">
+              <span>Total</span>
+              <span class="cart-total" id="cart-total">$0.00</span>
+            </div>
+            <div class="cart-action-btns">
+              <button class="btn btn-comanda btn-lg" onclick="createComanda()">🍽 Enviar a cocina</button>
+              <button class="btn btn-primary btn-lg" onclick="openCobroModal()">💳 Cobrar</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- PRODUCTOS + COMANDAS (derecha) -->
+        <div class="pos-right">
+          <div class="pos-topbar">
+            <input type="text" id="pos-search" placeholder="🔍  Buscar producto..." class="input pos-search-input"/>
+            <button class="btn-toggle-comandas" id="btn-toggle-comandas" onclick="toggleComandasPanel()">
+              Comandas <span class="comanda-badge" id="comanda-badge">0</span>
+            </button>
+          </div>
+          <div id="view-products" class="pos-view active-view">
+            <div class="category-tabs" id="pos-categories"></div>
+            <div class="products-grid" id="pos-grid"></div>
+          </div>
+          <div id="view-comandas" class="pos-view" style="display:none">
+            <div class="comandas-toolbar">
+              <span class="comandas-title">Comandas activas</span>
+              <button class="btn btn-outline btn-sm" onclick="loadComandas()">↻ Actualizar</button>
+            </div>
+            <div class="comandas-grid" id="comandas-grid"></div>
+          </div>
+        </div>
+
+      </div><!-- /pos-top -->
+
+      <!-- ── BARRA INFERIOR: ancho completo ── -->
+      <div class="pos-bottom">
+        <div class="cart-tabs">
+          <button class="cart-tab active" onclick="switchCartTab(this,'tab-cliente')">Cliente</button>
+          <button class="cart-tab" onclick="switchCartTab(this,'tab-cocina')">Nota de cocina</button>
+          <button class="cart-tab" onclick="switchCartTab(this,'tab-acciones')">Acciones</button>
+        </div>
+        <div class="cart-tab-panels">
+          <div id="tab-cliente" class="cart-tab-panel active">
+            <div class="pos-bottom-inner">
+              <input type="text" class="input" placeholder="Nombre del cliente (opcional)"/>
+              <div>
+                <div class="consumo-label">Consumo</div>
+                <div class="consumo-options">
+                  <button class="consumo-btn active" onclick="selectConsumo(this,'aqui')">Aquí</button>
+                  <button class="consumo-btn" onclick="selectConsumo(this,'frente')">Al frente</button>
+                  <button class="consumo-btn" onclick="selectConsumo(this,'llevar')">Para llevar</button>
+                </div>
+              </div>
+              <div class="pos-bottom-divider"></div>
+              <div>
+                <div class="consumo-label">Salsas</div>
+                <div class="salsas-grid-h">
+                  <div class="salsa-item" id="salsa-rosada">
+                    <span class="salsa-name">Rosada</span>
+                    <div class="salsa-counter">
+                      <button class="salsa-minus" onclick="changeSalsa('rosada',-1)">−</button>
+                      <span class="salsa-qty">0</span>
+                      <button class="salsa-plus" onclick="changeSalsa('rosada',1)">+</button>
+                    </div>
+                  </div>
+                  <div class="salsa-item" id="salsa-aji">
+                    <span class="salsa-name">Ají</span>
+                    <div class="salsa-counter">
+                      <button class="salsa-minus" onclick="changeSalsa('aji',-1)">−</button>
+                      <span class="salsa-qty">0</span>
+                      <button class="salsa-plus" onclick="changeSalsa('aji',1)">+</button>
+                    </div>
+                  </div>
+                  <div class="salsa-item" id="salsa-tartara">
+                    <span class="salsa-name">Tártara</span>
+                    <div class="salsa-counter">
+                      <button class="salsa-minus" onclick="changeSalsa('tartara',-1)">−</button>
+                      <span class="salsa-qty">0</span>
+                      <button class="salsa-plus" onclick="changeSalsa('tartara',1)">+</button>
+                    </div>
+                  </div>
+                  <div class="salsa-item" id="salsa-roja">
+                    <span class="salsa-name">Roja</span>
+                    <div class="salsa-counter">
+                      <button class="salsa-minus" onclick="changeSalsa('roja',-1)">−</button>
+                      <span class="salsa-qty">0</span>
+                      <button class="salsa-plus" onclick="changeSalsa('roja',1)">+</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div id="tab-cocina" class="cart-tab-panel">
+            <textarea id="sale-notes" class="input" rows="2" placeholder="Nota para cocina..."></textarea>
+          </div>
+          <div id="tab-acciones" class="cart-tab-panel">
+            <button class="btn btn-outline-danger btn-sm" onclick="clearCart()">🗑 Limpiar orden</button>
+          </div>
+        </div>
+      </div><!-- /pos-bottom -->
+
+    </div><!-- /pos-content -->
+  </section>
+
+  <!-- ═══════════════ VENTAS ═══════════════ -->
+  <section id="page-sales" class="page">
+    <div class="page-header">
+      <h1>Historial de Ventas</h1>
+      <div class="header-actions">
+        <input type="date" id="sales-from" class="input input-sm"/>
+        <span>a</span>
+        <input type="date" id="sales-to" class="input input-sm"/>
+        <button class="btn btn-primary btn-sm" onclick="loadSales()">Filtrar</button>
+      </div>
+    </div>
+    <div class="card">
+      <table class="data-table" id="sales-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Fecha</th>
+            <th>Total</th>
+            <th>Método</th>
+            <th>Notas</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ═══════════════ CAJA ═══════════════ -->
+  <section id="page-movements" class="page">
+    <div class="page-header">
+      <h1>Caja</h1>
+      <div id="caja-header-actions" class="header-actions">
+        <button class="btn btn-outline btn-sm" id="btn-nuevo-ingreso" onclick="openMovModal('ingreso')" style="color:#16a34a;border-color:#16a34a">+ Ingreso manual</button>
+        <button class="btn btn-danger btn-sm" id="btn-nuevo-egreso" onclick="openMovModal('egreso')">+ Egreso</button>
+      </div>
+    </div>
+
+    <!-- Banner estado de caja -->
+    <div id="register-banner" class="register-banner"></div>
+
+    <!-- Pestañas -->
+    <div class="caja-tabs">
+      <button class="caja-tab active" id="tab-egresos" onclick="switchCajaTab('egresos')">💸 Egresos</button>
+      <button class="caja-tab" id="tab-cierres" onclick="switchCajaTab('cierres')">🔒 Cierres de caja</button>
+    </div>
+
+    <!-- Tab: Egresos -->
+    <div id="caja-panel-egresos">
+      <div class="stats-grid mini">
+        <div class="stat-card green">
+          <div class="stat-label">Ingresos manuales del día</div>
+          <div class="stat-value" id="mov-total-in">$0</div>
+        </div>
+        <div class="stat-card red">
+          <div class="stat-label">Total egresos del día</div>
+          <div class="stat-value" id="mov-total-out">$0</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header-row">
+          <h3 style="margin:0;font-size:15px">Movimientos manuales</h3>
+          <div style="display:flex;gap:8px;align-items:center">
+            <input type="date" id="mov-from" class="input input-sm"/>
+            <span style="color:var(--text-muted)">a</span>
+            <input type="date" id="mov-to" class="input input-sm"/>
+            <button class="btn btn-outline btn-sm" onclick="loadMovements()">Filtrar</button>
+          </div>
+        </div>
+        <table class="data-table" id="movements-table">
+          <thead>
+            <tr><th>Fecha</th><th>Tipo</th><th>Descripción</th><th>Categoría</th><th>Monto</th><th></th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Tab: Cierres de caja -->
+    <div id="caja-panel-cierres" style="display:none">
+      <div class="card">
+        <table class="data-table" id="cierres-table">
+          <thead>
+            <tr><th>Apertura</th><th>Cierre</th><th>Ventas</th><th>Contado</th><th>Diferencia</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ INVENTARIO ═══════════════ -->
+  <section id="page-inventory" class="page">
+    <div class="page-header">
+      <h1>Inventario</h1>
+      <button class="btn btn-primary btn-sm" onclick="openProductModal()">+ Producto</button>
+    </div>
+    <div class="card">
+      <table class="data-table" id="inventory-table">
+        <thead>
+          <tr>
+            <th>Producto</th>
+            <th>Categoría</th>
+            <th>P. Venta</th>
+            <th>P. Compra</th>
+            <th>Margen</th>
+            <th>Stock</th>
+            <th>Estado</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ═══════════════ PÉRDIDAS ═══════════════ -->
+  <section id="page-losses" class="page">
+    <div class="page-header">
+      <h1>Pérdidas</h1>
+      <button class="btn btn-danger btn-sm" onclick="openLossModal()">+ Registrar pérdida</button>
+    </div>
+    <div class="card">
+      <table class="data-table" id="losses-table">
+        <thead>
+          <tr>
+            <th>Fecha</th>
+            <th>Producto</th>
+            <th>Cantidad</th>
+            <th>Motivo</th>
+            <th>Responsable</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ═══════════════ CONTABILIDAD ═══════════════ -->
+
+</main>
+
+<!-- ═══ MODAL CONFIGURACIÓN ═══ -->
+<div class="modal-overlay" id="modal-settings" onclick="closeModal('modal-settings')">
+  <div class="modal" onclick="event.stopPropagation()" style="max-width:480px">
+    <div class="modal-header">
+      <h3>⚙️ Configuración</h3>
+      <button class="modal-close" onclick="closeModal('modal-settings')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Nombre del negocio</label>
+        <input type="text" id="cfg-nombre" class="input" placeholder="Delicias del Rey"/>
+      </div>
+      <hr class="cierre-divider"/>
+      <div class="form-row">
+        <div class="form-group">
+          <label>🔑 Contraseña Administrativo</label>
+          <input type="password" id="cfg-pin-admin" class="input" placeholder="••••" maxlength="4"/>
+        </div>
+        <div class="form-group">
+          <label>🔑 Contraseña Trabajador</label>
+          <input type="password" id="cfg-pin-worker" class="input" placeholder="••••" maxlength="4"/>
+        </div>
+      </div>
+      <input type="hidden" id="cfg-wa-enabled" value="0"/>
+      <input type="hidden" id="cfg-wa-phone" value=""/>
+      <input type="hidden" id="cfg-wa-apikey" value=""/>
+      <hr class="cierre-divider"/>
+      <div style="margin-bottom:10px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <strong>📲 WhatsApp al cerrar caja</strong>
+          <label class="toggle-switch">
+            <input type="checkbox" id="cfg-greenapi-enabled"/>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div style="font-size:12px;color:var(--text-muted);line-height:1.8;background:#f8fafc;border-radius:8px;padding:10px 12px;border:1px solid #e2e8f0;margin-bottom:12px">
+          <strong>Pasos (solo una vez):</strong><br/>
+          1. Ve a <strong>green-api.com</strong> → crea cuenta gratis<br/>
+          2. Crea una instancia → copia el <strong>ID</strong> y el <strong>Token</strong><br/>
+          3. Escanea el <strong>QR</strong> con tu WhatsApp (como WhatsApp Web)<br/>
+          4. Pega el ID, Token y tu número aquí abajo
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>ID de instancia</label>
+          <input type="text" id="cfg-greenapi-instance" class="input" placeholder="1101234567"/>
+        </div>
+        <div class="form-group">
+          <label>Token</label>
+          <input type="text" id="cfg-greenapi-token" class="input" placeholder="abc123..."/>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Tu número WhatsApp (con 57, sin +)</label>
+        <input type="text" id="cfg-greenapi-phone" class="input" placeholder="573001234567"/>
+      </div>
+      <button class="btn btn-outline btn-sm" onclick="probarWhatsapp()" style="margin-top:4px">📲 Enviar mensaje de prueba</button>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-settings')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveSettings()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL ASIENTO CONTABLE ═══ -->
+<div class="modal-overlay" id="modal-journal" onclick="closeModal('modal-journal')">
+  <div class="modal" onclick="event.stopPropagation()" style="max-width:480px">
+    <div class="modal-header">
+      <h3>Nuevo Asiento</h3>
+      <button class="modal-close" onclick="closeModal('modal-journal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Fecha</label>
+        <input type="date" id="je-date" class="input"/>
+      </div>
+      <div class="form-group">
+        <label>Cuenta</label>
+        <select id="je-account" class="input" onchange="updateJEType()">
+          <option value="">— Seleccionar cuenta —</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Tipo <span id="je-type-badge" style="margin-left:6px"></span></label>
+        <input type="text" id="je-type-display" class="input" readonly style="background:#f8fafc;color:#64748b"/>
+      </div>
+      <div class="form-group">
+        <label>Monto</label>
+        <input type="number" id="je-amount" class="input" placeholder="$0.00" step="0.01" min="0.01"/>
+      </div>
+      <div class="form-group">
+        <label>Descripción</label>
+        <input type="text" id="je-description" class="input" placeholder="Concepto del asiento..."/>
+      </div>
+      <div class="form-group">
+        <label>Referencia (opcional)</label>
+        <input type="text" id="je-reference" class="input" placeholder="Factura #, recibo, etc."/>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-journal')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveJournalEntry()">Guardar asiento</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL DEVOLUCIÓN ═══ -->
+<div class="modal-overlay" id="modal-return" onclick="closeModal('modal-return')">
+  <div class="modal" onclick="event.stopPropagation()" style="max-width:520px">
+    <div class="modal-header">
+      <h3 id="modal-return-title">Devolución</h3>
+      <button class="modal-close" onclick="closeModal('modal-return')">&times;</button>
+    </div>
+    <div class="modal-body" id="modal-return-body"></div>
+    <div class="modal-footer">
+      <div style="flex:1">
+        <input type="text" id="return-reason" class="input" placeholder="Motivo de la devolución..."/>
+      </div>
+      <button class="btn btn-outline" onclick="closeModal('modal-return')">Cancelar</button>
+      <button class="btn btn-danger" onclick="confirmarDevolucion()">Confirmar devolución</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL PÉRDIDA ═══ -->
+<div class="modal-overlay" id="modal-loss" onclick="closeModal('modal-loss')">
+  <div class="modal" onclick="event.stopPropagation()" style="max-width:480px">
+    <div class="modal-header">
+      <h3>Registrar pérdida</h3>
+      <button class="modal-close" onclick="closeModal('modal-loss')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Producto</label>
+        <select id="loss-product" class="input" onchange="updateLossUnit()">
+          <option value="">— Seleccionar producto —</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Cantidad perdida <span id="loss-unit-label" style="color:var(--text-muted);font-weight:400"></span></label>
+        <input type="number" id="loss-quantity" class="input" placeholder="0" min="0.01" step="0.01"/>
+      </div>
+      <div class="form-group">
+        <label>Motivo de la pérdida</label>
+        <select id="loss-reason-select" class="input" onchange="toggleLossReasonOther()">
+          <option value="Caducidad">Caducidad</option>
+          <option value="Daño">Daño / accidente</option>
+          <option value="Robo">Robo</option>
+          <option value="Error de preparación">Error de preparación</option>
+          <option value="Merma">Merma</option>
+          <option value="Otro">Otro...</option>
+        </select>
+        <input type="text" id="loss-reason-other" class="input" placeholder="Especifica el motivo..."
+          style="display:none;margin-top:8px"/>
+      </div>
+      <div class="form-group">
+        <label>Responsable</label>
+        <input type="text" id="loss-responsible" class="input" placeholder="Nombre de quien reporta..."/>
+      </div>
+      <div class="form-group">
+        <label>Notas adicionales (opcional)</label>
+        <input type="text" id="loss-notes" class="input" placeholder="Observaciones..."/>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-loss')">Cancelar</button>
+      <button class="btn btn-danger" onclick="saveLoss()">Registrar pérdida</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL APERTURA DE CAJA ═══ -->
+<div class="modal-overlay" id="modal-apertura" onclick="closeModal('modal-apertura')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h3>Abrir caja</h3>
+      <button class="modal-close" onclick="closeModal('modal-apertura')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Turno</label>
+        <div class="consumo-options" style="gap:10px">
+          <button class="consumo-btn active" id="turno-btn-manana" onclick="seleccionarTurnoBtn(this,'manana')">☀️ Mañana</button>
+          <button class="consumo-btn" id="turno-btn-tarde" onclick="seleccionarTurnoBtn(this,'tarde')">🌙 Tarde</button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Fondo inicial (efectivo en caja al abrir)</label>
+        <input type="number" id="apertura-fondo" class="input" placeholder="$0" step="1000"/>
+      </div>
+      <div class="form-group">
+        <label>Notas (opcional)</label>
+        <input type="text" id="apertura-notes" class="input" placeholder="Cajero, observaciones..."/>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-apertura')">Cancelar</button>
+      <button class="btn btn-primary" onclick="confirmarApertura()">Abrir caja</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL CIERRE DE CAJA ═══ -->
+<div class="modal-overlay" id="modal-cierre" onclick="closeModal('modal-cierre')">
+  <div class="modal modal-cierre" onclick="event.stopPropagation()">
+    <div class="cierre-header">
+      <div>
+        <h3>Cerrando la caja registradora</h3>
+        <div id="cierre-turno" style="font-size:13px;color:var(--text-muted);margin-top:2px"></div>
+      </div>
+      <div id="cierre-header-totals" style="text-align:right;font-weight:700;font-size:15px"></div>
+    </div>
+    <div class="modal-body cierre-modal-body" id="modal-cierre-body"></div>
+    <div class="modal-footer">
+      <div style="flex:1">
+        <input type="text" id="cierre-notes" class="input" placeholder="Notas del cierre (opcional)..."/>
+      </div>
+      <button class="btn btn-outline" onclick="closeModal('modal-cierre')">Cancelar</button>
+      <button class="btn btn-danger" id="btn-confirmar-cierre" onclick="confirmarCierre()">Cerrar caja</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL CONTADOR DE BILLETES ═══ -->
+<div class="modal-overlay" id="modal-billetes" onclick="closeModal('modal-billetes')">
+  <div class="modal modal-billetes" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h3>Contador de efectivo</h3>
+      <button class="modal-close" onclick="closeModal('modal-billetes')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="billetes-seccion-titulo">💵 Billetes</div>
+      <div class="billetes-grid" id="billetes-grid"></div>
+      <div class="billetes-seccion-titulo" style="margin-top:16px">🪙 Monedas</div>
+      <div class="billetes-grid" id="monedas-grid"></div>
+      <div class="billetes-total-bar">
+        <span>Total contado</span>
+        <span class="billetes-total-val" id="billetes-total">$0.00</span>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-billetes')">Cancelar</button>
+      <button class="btn btn-primary" onclick="aplicarConteo()">Usar este monto</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL HISTORIAL CIERRES ═══ -->
+<div class="modal-overlay" id="modal-historial-cierres" onclick="closeModal('modal-historial-cierres')">
+  <div class="modal modal-historial" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h3>Historial de cierres</h3>
+      <button class="modal-close" onclick="closeModal('modal-historial-cierres')">&times;</button>
+    </div>
+    <div class="modal-body" id="modal-historial-body"></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-historial-cierres')">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL COBRO ═══ -->
+<div class="modal-overlay" id="modal-cobro" onclick="closeModal('modal-cobro')">
+  <div class="modal modal-cobro" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h3>Cobrar pedido</h3>
+      <button class="modal-close" onclick="closeModal('modal-cobro')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="cobro-total-display">
+        <span class="cobro-label">Total a cobrar</span>
+        <span class="cobro-total" id="cobro-total-display">$0.00</span>
+      </div>
+
+      <div class="form-group" style="margin-top:18px">
+        <label>Método de pago</label>
+        <div class="payment-methods-grid" id="cobro-methods">
+          <button class="pay-method-btn active" data-method="efectivo" onclick="selectPayMethod(this)">💵 Efectivo</button>
+          <button class="pay-method-btn" data-method="tarjeta" onclick="selectPayMethod(this)">💳 Tarjeta</button>
+          <button class="pay-method-btn" data-method="transferencia" onclick="selectPayMethod(this)">📲 Transferencia</button>
+        </div>
+      </div>
+
+      <div id="cobro-efectivo-section">
+        <div class="form-group">
+          <label>¿Con cuánto paga el cliente?</label>
+          <input type="number" id="cobro-recibido" class="input cobro-input" placeholder="$0.00"
+            oninput="calcCobroChange()" autofocus/>
+        </div>
+        <div class="cobro-change-box" id="cobro-change-box">
+          <span>Cambio</span>
+          <span class="cobro-change-amount" id="cobro-change-amount">$0.00</span>
+        </div>
+        <div class="cobro-quick-btns" id="cobro-quick-btns"></div>
+      </div>
+
+      <div class="form-group">
+        <label>Notas (opcional)</label>
+        <input type="text" id="cobro-notes" class="input" placeholder="Mesa 3, para llevar..."/>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-cobro')">Cancelar</button>
+      <button class="btn btn-primary btn-lg" id="cobro-confirm-btn" onclick="confirmCobro()" style="min-width:150px">
+        ✓ Confirmar cobro
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL COMANDA ═══ -->
+<div class="modal-overlay" id="modal-comanda" onclick="closeModal('modal-comanda')">
+  <div class="modal modal-comanda" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h3 id="modal-comanda-title">Comanda</h3>
+      <button class="modal-close" onclick="closeModal('modal-comanda')">&times;</button>
+    </div>
+    <div class="modal-body" id="modal-comanda-body"></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-comanda')">Cerrar</button>
+      <button class="btn btn-comanda" onclick="printComanda()">🖨 Imprimir comanda</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL PRODUCTO ═══ -->
+<div class="modal-overlay" id="modal-product" onclick="closeModal('modal-product')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h3 id="modal-product-title">Nuevo Producto</h3>
+      <button class="modal-close" onclick="closeModal('modal-product')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="prod-id"/>
+      <!-- Foto del producto -->
+      <div class="form-group">
+        <label>Foto del producto</label>
+        <div class="prod-img-upload-area" onclick="document.getElementById('prod-image-file').click()">
+          <img id="prod-img-preview" src="" alt="" style="display:none;width:100%;height:100%;object-fit:cover;border-radius:10px"/>
+          <div id="prod-img-placeholder">
+            <span style="font-size:28px">📷</span>
+            <span style="font-size:13px;color:var(--text-muted);margin-top:4px">Toca para subir foto</span>
+          </div>
+        </div>
+        <input type="file" id="prod-image-file" accept="image/*" style="display:none" onchange="previewProductImage(event)"/>
+      </div>
+      <div class="form-group">
+        <label>Nombre *</label>
+        <input type="text" id="prod-name" class="input" placeholder="Café americano"/>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Categoría</label>
+          <input type="text" id="prod-category" class="input" placeholder="Bebidas"/>
+        </div>
+        <div class="form-group">
+          <label>Unidad</label>
+          <input type="text" id="prod-unit" class="input" placeholder="taza"/>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Precio de venta *</label>
+          <input type="number" id="prod-price" class="input" placeholder="0" step="1"/>
+        </div>
+        <div class="form-group">
+          <label>Precio de compra</label>
+          <input type="number" id="prod-cost" class="input" placeholder="0" step="1"/>
+        </div>
+      </div>
+      <div class="form-group">
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
+          <input type="checkbox" id="prod-infinite" onchange="toggleInfiniteStock(this)" style="width:18px;height:18px;accent-color:#FC4C02;cursor:pointer"/>
+          <span>Stock infinito <span style="font-size:12px;color:var(--text-muted)">(no se descuenta al vender)</span></span>
+        </label>
+      </div>
+      <div id="prod-stock-section" class="form-row">
+        <div class="form-group">
+          <label>Stock actual</label>
+          <input type="number" id="prod-stock" class="input" placeholder="0"/>
+        </div>
+        <div class="form-group">
+          <label>Alerta mínima</label>
+          <input type="number" id="prod-alert" class="input" placeholder="5"/>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-product')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveProduct()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL MOVIMIENTO ═══ -->
+<div class="modal-overlay" id="modal-movement" onclick="closeModal('modal-movement')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h3>Nuevo Movimiento</h3>
+      <button class="modal-close" onclick="closeModal('modal-movement')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Tipo *</label>
+        <select id="mov-type" class="input">
+          <option value="ingreso">Ingreso</option>
+          <option value="egreso">Egreso</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Monto *</label>
+        <input type="number" id="mov-amount" class="input" placeholder="0.00" step="0.01"/>
+      </div>
+      <div class="form-group">
+        <label>Descripción *</label>
+        <input type="text" id="mov-desc" class="input" placeholder="Pago de proveedor, renta, etc."/>
+      </div>
+      <div class="form-group">
+        <label>Categoría</label>
+        <input type="text" id="mov-cat" class="input" placeholder="Proveedores, Gastos, etc."/>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-movement')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveMovement()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL DETALLE VENTA ═══ -->
+<div class="modal-overlay" id="modal-sale-detail" onclick="closeModal('modal-sale-detail')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h3 id="modal-sale-title">Detalle de Venta</h3>
+      <button class="modal-close" onclick="closeModal('modal-sale-detail')">&times;</button>
+    </div>
+    <div class="modal-body" id="modal-sale-body"></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-sale-detail')">Cerrar</button>
+      <button class="btn btn-primary" onclick="printReceipt()">Imprimir</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL FACTURA ═══ -->
+<div class="modal-overlay" id="modal-factura" onclick="closeModal('modal-factura')">
+  <div class="modal modal-factura-wrap" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h3>Vista previa — Factura</h3>
+      <button class="modal-close" onclick="closeModal('modal-factura')">&times;</button>
+    </div>
+    <div class="modal-body modal-factura-body" id="modal-factura-body"></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-factura')">Cerrar</button>
+      <button class="btn btn-primary" onclick="imprimirFactura()">🖨 Imprimir</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ TICKET IMPRIMIBLE ═══ -->
+<div id="print-area" style="display:none">
+  <div id="ticket-content"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="/js/app.js?v=36"></script>
+</body>
+</html>
