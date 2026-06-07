@@ -187,13 +187,74 @@ def init_db():
             category TEXT NOT NULL DEFAULT 'General',
             created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
         );
+        CREATE TABLE IF NOT EXISTS workers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            cargo TEXT NOT NULL DEFAULT '',
+            phone TEXT NOT NULL DEFAULT '',
+            active INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+        );
+        CREATE TABLE IF NOT EXISTS worker_notes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            worker_id INTEGER NOT NULL,
+            content TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+            FOREIGN KEY (worker_id) REFERENCES workers(id)
+        );
+        CREATE TABLE IF NOT EXISTS tasks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            funcion TEXT NOT NULL,
+            area TEXT NOT NULL DEFAULT '',
+            assigned_to TEXT NOT NULL DEFAULT '',
+            status TEXT NOT NULL DEFAULT 'pendiente' CHECK(status IN ('pendiente','realizado')),
+            created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+            completed_at TEXT
+        );
         """)
+
+        # Tabla de documentos de trabajadores
+        conn.execute("""
+        CREATE TABLE IF NOT EXISTS worker_documents (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            worker_id INTEGER NOT NULL,
+            filename TEXT NOT NULL DEFAULT '',
+            original_name TEXT NOT NULL DEFAULT '',
+            doc_type TEXT NOT NULL DEFAULT 'general',
+            description TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+            FOREIGN KEY (worker_id) REFERENCES workers(id)
+        )""")
 
         # Agrega columna image si no existe (migración)
         try:
             conn.execute('ALTER TABLE products ADD COLUMN image TEXT DEFAULT NULL')
         except Exception:
             pass
+
+        # Migración: agregar note_type a worker_notes
+        try:
+            conn.execute("ALTER TABLE worker_notes ADD COLUMN note_type TEXT NOT NULL DEFAULT 'nota'")
+        except Exception:
+            pass
+
+        # Migración: agregar sale_value a losses
+        try:
+            conn.execute("ALTER TABLE losses ADD COLUMN sale_value REAL NOT NULL DEFAULT 0")
+        except Exception:
+            pass
+
+        # Migración: agregar category a losses
+        try:
+            conn.execute("ALTER TABLE losses ADD COLUMN category TEXT NOT NULL DEFAULT ''")
+        except Exception:
+            pass
+
+        # Seed trabajadores fijos
+        for wname, wcargo in [('Camila', 'Empleada'), ('Daniela', 'Empleada'), ('Juan', 'Empleado')]:
+            exists = conn.execute('SELECT id FROM workers WHERE name=?', (wname,)).fetchone()
+            if not exists:
+                conn.execute('INSERT INTO workers (name, cargo) VALUES (?,?)', (wname, wcargo))
 
         # Migración: reemplazar cuentas genéricas con cuentas específicas de la cafetería
         try:
@@ -1054,9 +1115,10 @@ def create_loss():
         return jsonify({'error': 'Producto, cantidad, motivo y responsable son requeridos'}), 400
     with get_db() as conn:
         cur = conn.execute(
-            'INSERT INTO losses (product_id, product_name, quantity, unit, reason, responsible, notes) VALUES (?,?,?,?,?,?,?)',
+            'INSERT INTO losses (product_id, product_name, quantity, unit, reason, responsible, notes, sale_value, category) VALUES (?,?,?,?,?,?,?,?,?)',
             (d.get('product_id'), d['product_name'], d['quantity'],
-             d.get('unit', 'unidad'), d['reason'], d['responsible'], d.get('notes', ''))
+             d.get('unit', 'unidad'), d['reason'], d['responsible'], d.get('notes', ''),
+             d.get('sale_value', 0), d.get('category', ''))
         )
         # Descontar del inventario si el producto tiene id
         if d.get('product_id'):
@@ -1146,6 +1208,277 @@ def test_whatsapp():
     except Exception as e:
         print(f'[GreenAPI] Error: {e}')
         return jsonify({'error': str(e)}), 500
+
+# ─── TRABAJADORES ────────────────────────────────────
+@app.route('/api/workers', methods=['GET'])
+def get_workers():
+    with get_db() as conn:
+        rows = conn.execute('SELECT * FROM workers WHERE active=1 ORDER BY name').fetchall()
+    return jsonify(rows_to_list(rows))
+
+@app.route('/api/workers', methods=['POST'])
+def create_worker():
+    d = request.json or {}
+    if not d.get('name'):
+        return jsonify({'error': 'El nombre es requerido'}), 400
+    with get_db() as conn:
+        cur = conn.execute(
+            'INSERT INTO workers (name, cargo, phone) VALUES (?,?,?)',
+            (d['name'], d.get('cargo',''), d.get('phone',''))
+        )
+        row = conn.execute('SELECT * FROM workers WHERE id=?', (cur.lastrowid,)).fetchone()
+    return jsonify(row_to_dict(row))
+
+@app.route('/api/workers/<int:wid>', methods=['DELETE'])
+def delete_worker(wid):
+    with get_db() as conn:
+        conn.execute('UPDATE workers SET active=0 WHERE id=?', (wid,))
+    return jsonify({'ok': True})
+
+@app.route('/api/workers/<int:wid>/notes', methods=['GET'])
+def get_worker_notes(wid):
+    with get_db() as conn:
+        rows = conn.execute(
+            'SELECT * FROM worker_notes WHERE worker_id=? ORDER BY created_at DESC', (wid,)
+        ).fetchall()
+    return jsonify(rows_to_list(rows))
+
+@app.route('/api/workers/<int:wid>/notes', methods=['POST'])
+def create_worker_note(wid):
+    d = request.json or {}
+    if not d.get('content'):
+        return jsonify({'error': 'El contenido es requerido'}), 400
+    with get_db() as conn:
+        worker = conn.execute('SELECT id FROM workers WHERE id=? AND active=1', (wid,)).fetchone()
+        if not worker:
+            return jsonify({'error': 'Trabajador no encontrado'}), 404
+        note_type = d.get('note_type', 'nota')
+        cur = conn.execute(
+            'INSERT INTO worker_notes (worker_id, content, note_type) VALUES (?,?,?)',
+            (wid, d['content'], note_type)
+        )
+        row = conn.execute('SELECT * FROM worker_notes WHERE id=?', (cur.lastrowid,)).fetchone()
+    return jsonify(row_to_dict(row))
+
+@app.route('/api/workers/notes/<int:nid>', methods=['DELETE'])
+def delete_worker_note(nid):
+    with get_db() as conn:
+        conn.execute('DELETE FROM worker_notes WHERE id=?', (nid,))
+    return jsonify({'ok': True})
+
+@app.route('/api/workers/<int:wid>/stats', methods=['GET'])
+def get_worker_stats(wid):
+    with get_db() as conn:
+        worker = conn.execute('SELECT * FROM workers WHERE id=?', (wid,)).fetchone()
+        if not worker:
+            return jsonify({'error': 'Not found'}), 404
+        name = worker['name']
+        # Descuadres (cierres con diferencia negativa donde fue responsable)
+        desc = conn.execute(
+            "SELECT COUNT(*) as cnt, COALESCE(SUM(ABS(difference)),0) as total FROM cash_registers WHERE status='cerrada' AND notes LIKE ? AND difference < 0",
+            (f'%{name}%',)
+        ).fetchone()
+        # Pérdidas registradas
+        perd = conn.execute(
+            "SELECT COUNT(*) as cnt, COALESCE(SUM(sale_value),0) as valor FROM losses WHERE responsible LIKE ?",
+            (f'%{name}%',)
+        ).fetchone()
+        # Tareas pendientes
+        tareas_pend = conn.execute(
+            "SELECT COUNT(*) as cnt FROM tasks WHERE assigned_to LIKE ? AND status='pendiente'",
+            (f'%{name}%',)
+        ).fetchone()
+        tareas_total = conn.execute(
+            "SELECT COUNT(*) as cnt FROM tasks WHERE assigned_to LIKE ?",
+            (f'%{name}%',)
+        ).fetchone()
+        # Notas
+        notas_cnt = conn.execute(
+            "SELECT COUNT(*) as cnt FROM worker_notes WHERE worker_id=?", (wid,)
+        ).fetchone()
+        # Últimos descuadres
+        ultimos = conn.execute(
+            "SELECT opened_at, closed_at, difference, notes FROM cash_registers WHERE status='cerrada' AND notes LIKE ? AND difference < 0 ORDER BY closed_at DESC LIMIT 5",
+            (f'%{name}%',)
+        ).fetchall()
+        # Lista de pérdidas del trabajador
+        perdidas_list = conn.execute(
+            "SELECT product_name, quantity, unit, reason, category, sale_value, created_at FROM losses WHERE responsible LIKE ? ORDER BY created_at DESC",
+            (f'%{name}%',)
+        ).fetchall()
+    return jsonify({
+        'descuadres': {'count': desc['cnt'], 'total': desc['total']},
+        'perdidas': {'count': perd['cnt'], 'valor': perd['valor']},
+        'tareas': {'pendientes': tareas_pend['cnt'], 'total': tareas_total['cnt']},
+        'notas': notas_cnt['cnt'],
+        'ultimos_descuadres': rows_to_list(ultimos),
+        'perdidas_list': rows_to_list(perdidas_list)
+    })
+
+@app.route('/api/workers/<int:wid>/documents', methods=['GET'])
+def get_worker_documents(wid):
+    with get_db() as conn:
+        rows = conn.execute(
+            'SELECT * FROM worker_documents WHERE worker_id=? ORDER BY created_at DESC', (wid,)
+        ).fetchall()
+    return jsonify(rows_to_list(rows))
+
+@app.route('/api/workers/<int:wid>/documents', methods=['POST'])
+def upload_worker_document(wid):
+    import time as _time
+    doc_type    = request.form.get('doc_type', 'general')
+    description = request.form.get('description', '')
+    filename    = ''
+    original_name = ''
+    upload_dir  = os.path.join(os.path.dirname(__file__), 'public', 'uploads', 'workers')
+    os.makedirs(upload_dir, exist_ok=True)
+    if 'file' in request.files:
+        f = request.files['file']
+        if f and f.filename:
+            ext = f.filename.rsplit('.', 1)[-1].lower() if '.' in f.filename else 'pdf'
+            filename = f'worker_{wid}_{int(_time.time())}.{ext}'
+            original_name = f.filename
+            f.save(os.path.join(upload_dir, filename))
+    with get_db() as conn:
+        worker = conn.execute('SELECT id FROM workers WHERE id=? AND active=1', (wid,)).fetchone()
+        if not worker:
+            return jsonify({'error': 'Trabajador no encontrado'}), 404
+        cur = conn.execute(
+            'INSERT INTO worker_documents (worker_id, filename, original_name, doc_type, description) VALUES (?,?,?,?,?)',
+            (wid, filename, original_name, doc_type, description)
+        )
+        row = conn.execute('SELECT * FROM worker_documents WHERE id=?', (cur.lastrowid,)).fetchone()
+    return jsonify(row_to_dict(row))
+
+@app.route('/api/workers/documents/<int:did>', methods=['DELETE'])
+def delete_worker_document(did):
+    with get_db() as conn:
+        doc = conn.execute('SELECT * FROM worker_documents WHERE id=?', (did,)).fetchone()
+        if doc and doc['filename']:
+            path = os.path.join(os.path.dirname(__file__), 'public', 'uploads', 'workers', doc['filename'])
+            if os.path.exists(path):
+                os.remove(path)
+        conn.execute('DELETE FROM worker_documents WHERE id=?', (did,))
+    return jsonify({'ok': True})
+
+# ─── TAREAS ──────────────────────────────────────────
+@app.route('/api/tasks', methods=['GET'])
+def get_tasks():
+    with get_db() as conn:
+        rows = conn.execute('SELECT * FROM tasks ORDER BY status ASC, created_at DESC').fetchall()
+    return jsonify(rows_to_list(rows))
+
+@app.route('/api/tasks', methods=['POST'])
+def create_task():
+    d = request.json or {}
+    if not d.get('funcion'):
+        return jsonify({'error': 'La función es requerida'}), 400
+    with get_db() as conn:
+        cur = conn.execute(
+            'INSERT INTO tasks (funcion, area, assigned_to) VALUES (?,?,?)',
+            (d['funcion'], d.get('area',''), d.get('assigned_to',''))
+        )
+        row = conn.execute('SELECT * FROM tasks WHERE id=?', (cur.lastrowid,)).fetchone()
+    return jsonify(row_to_dict(row))
+
+@app.route('/api/tasks/<int:tid>/status', methods=['PUT'])
+def update_task_status(tid):
+    d = request.json or {}
+    new_status = d.get('status')
+    if new_status not in ('pendiente', 'realizado'):
+        return jsonify({'error': 'Estado inválido'}), 400
+    completed_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S') if new_status == 'realizado' else None
+    with get_db() as conn:
+        conn.execute('UPDATE tasks SET status=?, completed_at=? WHERE id=?', (new_status, completed_at, tid))
+        row = conn.execute('SELECT * FROM tasks WHERE id=?', (tid,)).fetchone()
+    return jsonify(row_to_dict(row))
+
+@app.route('/api/tasks/<int:tid>', methods=['DELETE'])
+def delete_task(tid):
+    with get_db() as conn:
+        conn.execute('DELETE FROM tasks WHERE id=?', (tid,))
+    return jsonify({'ok': True})
+
+# ─── RESET ───────────────────────────────────────────
+@app.route('/api/reset', methods=['POST'])
+def reset_pos():
+    d = request.json or {}
+    pin = str(d.get('pin', '')).strip()
+    if not pin:
+        return jsonify({'error': 'PIN requerido'}), 400
+
+    with get_db() as conn:
+        cfg = {r['key']: r['value'] for r in conn.execute('SELECT key,value FROM settings').fetchall()}
+
+    pin_admin  = cfg.get('pin_admin',  '1623')
+    pin_worker = cfg.get('pin_worker', '0000')
+
+    if pin == pin_admin:
+        # Borrar TODO
+        with get_db() as conn:
+            conn.executescript("""
+                DELETE FROM sale_items;
+                DELETE FROM sales;
+                DELETE FROM cash_movements;
+                DELETE FROM cash_registers;
+                DELETE FROM comandas;
+                DELETE FROM return_items;
+                DELETE FROM returns;
+                DELETE FROM journal_entries;
+                DELETE FROM losses;
+                DELETE FROM products;
+                UPDATE SQLITE_SEQUENCE SET seq=0 WHERE name IN
+                    ('sales','sale_items','cash_movements','cash_registers',
+                     'comandas','returns','return_items','journal_entries',
+                     'losses','products');
+            """)
+            # Reinsertar productos de muestra
+            samples = [
+                ('Café americano','Bebidas',25,100,'taza',10),
+                ('Café con leche','Bebidas',30,100,'taza',10),
+                ('Capuchino','Bebidas',35,100,'taza',10),
+                ('Té negro','Bebidas',20,50,'taza',10),
+                ('Agua natural 500ml','Bebidas',15,24,'botella',6),
+                ('Croissant','Panadería',28,20,'pieza',5),
+                ('Muffin','Panadería',25,15,'pieza',5),
+                ('Sándwich jamón','Comida',55,10,'pieza',3),
+                ('Ensalada de frutas','Comida',45,8,'porción',3),
+                ('Jugo naranja','Bebidas',35,10,'vaso',5),
+            ]
+            conn.executemany(
+                'INSERT INTO products (name,category,price,stock,unit,low_stock_alert) VALUES (?,?,?,?,?,?)',
+                samples
+            )
+        return jsonify({'ok': True, 'type': 'full'})
+
+    elif pin == pin_worker:
+        # Borrar solo inventario
+        with get_db() as conn:
+            conn.executescript("""
+                DELETE FROM products;
+                UPDATE SQLITE_SEQUENCE SET seq=0 WHERE name='products';
+            """)
+            samples = [
+                ('Café americano','Bebidas',25,100,'taza',10),
+                ('Café con leche','Bebidas',30,100,'taza',10),
+                ('Capuchino','Bebidas',35,100,'taza',10),
+                ('Té negro','Bebidas',20,50,'taza',10),
+                ('Agua natural 500ml','Bebidas',15,24,'botella',6),
+                ('Croissant','Panadería',28,20,'pieza',5),
+                ('Muffin','Panadería',25,15,'pieza',5),
+                ('Sándwich jamón','Comida',55,10,'pieza',3),
+                ('Ensalada de frutas','Comida',45,8,'porción',3),
+                ('Jugo naranja','Bebidas',35,10,'vaso',5),
+            ]
+            conn.executemany(
+                'INSERT INTO products (name,category,price,stock,unit,low_stock_alert) VALUES (?,?,?,?,?,?)',
+                samples
+            )
+        return jsonify({'ok': True, 'type': 'inventory'})
+
+    else:
+        return jsonify({'error': 'PIN incorrecto'}), 401
+
 
 def send_whatsapp(phone, instance, token, message):
     try:

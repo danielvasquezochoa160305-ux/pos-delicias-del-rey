@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
   <link href="https://fonts.googleapis.com/css2?family=Pacifico&family=Barlow+Condensed:wght@400;600;700;800&display=swap" rel="stylesheet"/>
-  <link rel="stylesheet" href="/css/style.css?v=29"/>
+  <link rel="stylesheet" href="/css/style.css?v=57"/>
 </head>
 <body>
 
@@ -239,6 +239,130 @@
   </div>
 </div>
 
+<!-- WORKERS SCREEN -->
+<!-- ═══ PANTALLA TRABAJADORES (lista) ═══ -->
+<div id="workers-screen" style="display:none;position:fixed;inset:0;background:#f1f5f9;z-index:9998;flex-direction:column;overflow:hidden">
+  <div style="background:#FC4C02;padding:0 24px;height:58px;display:flex;align-items:center;gap:16px;flex-shrink:0">
+    <button onclick="closeWorkersScreen()" style="background:rgba(0,0,0,.15);border:1px solid rgba(0,0,0,.2);color:#fff;padding:7px 14px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">← Volver al inicio</button>
+    <span style="font-size:20px;font-weight:700;color:#fff;font-family:'Pacifico',cursive;flex:1">👷 Equipo</span>
+  </div>
+  <div style="flex:1;overflow-y:auto;padding:28px 24px">
+    <div id="workers-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:20px;max-width:960px;margin:0 auto"></div>
+  </div>
+</div>
+
+<!-- ═══ PANTALLA DETALLE TRABAJADOR ═══ -->
+<div id="worker-detail-screen" style="display:none;position:fixed;inset:0;background:#f1f5f9;z-index:9999;flex-direction:column;overflow:hidden">
+  <!-- Header -->
+  <div id="worker-detail-header" style="background:#FC4C02;padding:0 24px;height:58px;display:flex;align-items:center;gap:16px;flex-shrink:0">
+    <button onclick="closeWorkerDetail()" style="background:rgba(0,0,0,.15);border:1px solid rgba(0,0,0,.2);color:#fff;padding:7px 14px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">← Equipo</button>
+    <div style="flex:1;display:flex;align-items:center;gap:10px">
+      <span id="worker-detail-avatar" style="font-size:26px"></span>
+      <div>
+        <div id="worker-detail-name" style="font-size:18px;font-weight:700;color:#fff;font-family:'Pacifico',cursive"></div>
+        <div id="worker-detail-cargo" style="font-size:12px;color:rgba(255,255,255,.8)"></div>
+      </div>
+    </div>
+  </div>
+  <!-- Tabs -->
+  <div style="background:#fff;border-bottom:1px solid #e2e8f0;padding:0 24px;display:flex;gap:0;flex-shrink:0">
+    <button class="worker-tab active" id="wtab-resumen" onclick="switchWorkerTab('resumen')">📊 Resumen</button>
+    <button class="worker-tab" id="wtab-notas" onclick="switchWorkerTab('notas')">📝 Notas</button>
+    <button class="worker-tab" id="wtab-hoja" onclick="switchWorkerTab('hoja')">📋 Hoja de vida</button>
+  </div>
+  <!-- Tab content -->
+  <div style="flex:1;overflow-y:auto">
+    <!-- RESUMEN -->
+    <div id="wpanel-resumen" style="padding:24px;max-width:800px;margin:0 auto">
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:24px">
+        <div class="worker-stat-card red">
+          <div class="worker-stat-num" id="ws-descuadres-count">—</div>
+          <div class="worker-stat-label">Descuadres de caja</div>
+          <div class="worker-stat-sub" id="ws-descuadres-total"></div>
+        </div>
+        <div class="worker-stat-card orange">
+          <div class="worker-stat-num" id="ws-perdidas-count">—</div>
+          <div class="worker-stat-label">Pérdidas registradas</div>
+          <div class="worker-stat-sub" id="ws-perdidas-valor"></div>
+        </div>
+        <div class="worker-stat-card blue">
+          <div class="worker-stat-num" id="ws-tareas-pend">—</div>
+          <div class="worker-stat-label">Tareas pendientes</div>
+          <div class="worker-stat-sub" id="ws-tareas-total"></div>
+        </div>
+      </div>
+      <div id="ws-descuadres-list"></div>
+    </div>
+    <!-- NOTAS -->
+    <div id="wpanel-notas" style="display:none;padding:24px;max-width:700px;margin:0 auto">
+      <div style="background:#fff;border-radius:12px;padding:20px;margin-bottom:20px;box-shadow:0 1px 4px rgba(0,0,0,.06)">
+        <div style="font-weight:700;font-size:14px;margin-bottom:12px">Nueva nota</div>
+        <div style="display:flex;gap:8px;margin-bottom:10px">
+          <select id="worker-note-type" class="input input-sm" style="width:auto">
+            <option value="nota">📝 Nota general</option>
+            <option value="llamado">⚠️ Llamado de atención</option>
+            <option value="logro">🏆 Logro / Reconocimiento</option>
+          </select>
+        </div>
+        <textarea id="worker-note-input" class="input" rows="3" placeholder="Escribe una nota..."
+          style="resize:vertical;font-family:inherit;margin-bottom:10px"
+          onkeydown="if(event.ctrlKey&&event.key==='Enter') saveWorkerNote()"></textarea>
+        <button class="btn btn-primary btn-sm" onclick="saveWorkerNote()">+ Agregar nota</button>
+        <span style="font-size:11px;color:var(--text-muted);margin-left:8px">Ctrl+Enter</span>
+      </div>
+      <div id="worker-notes-list"></div>
+    </div>
+    <!-- HOJA DE VIDA -->
+    <div id="wpanel-hoja" style="display:none;padding:24px;max-width:700px;margin:0 auto">
+
+      <!-- ── Anotaciones ── -->
+      <div style="background:#fff;border-radius:12px;padding:20px;margin-bottom:20px;box-shadow:0 1px 4px rgba(0,0,0,.06)">
+        <div style="font-weight:700;font-size:14px;margin-bottom:14px">📌 Nueva anotación</div>
+        <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+          <select id="wann-type" class="input input-sm" style="width:auto;flex:1;min-width:180px">
+            <option value="llegada_tarde">🕐 Llegada tarde</option>
+            <option value="ausencia_inj">❌ Ausencia injustificada</option>
+            <option value="ausencia_just">✅ Ausencia justificada</option>
+            <option value="incidente">⚠️ Incidente</option>
+            <option value="observacion">📋 Observación general</option>
+            <option value="felicitacion">🌟 Felicitación / Logro</option>
+          </select>
+        </div>
+        <textarea id="wann-content" class="input" rows="2" placeholder="Describe la situación..."
+          style="resize:vertical;font-family:inherit;margin-bottom:10px"
+          onkeydown="if(event.ctrlKey&&event.key==='Enter') saveWorkerAnnotation()"></textarea>
+        <button class="btn btn-primary btn-sm" onclick="saveWorkerAnnotation()">+ Guardar anotación</button>
+      </div>
+      <div id="worker-ann-list" style="margin-bottom:24px"></div>
+
+      <!-- ── Documentos ── -->
+      <div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#64748b;margin-bottom:12px">📎 Documentos adjuntos</div>
+      <div style="background:#fff;border-radius:12px;padding:20px;margin-bottom:20px;box-shadow:0 1px 4px rgba(0,0,0,.06)">
+        <div class="form-group">
+          <label>Tipo de documento</label>
+          <select id="wdoc-type" class="input">
+            <option value="descargo">📄 Descargo</option>
+            <option value="llamado">⚠️ Llamado de atención</option>
+            <option value="contrato">📋 Contrato / Acuerdo</option>
+            <option value="certificado">🏅 Certificado</option>
+            <option value="general">📁 Otro documento</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Descripción</label>
+          <input type="text" id="wdoc-desc" class="input" placeholder="Ej: Descargo por diferencia de caja del 5 de junio"/>
+        </div>
+        <div class="form-group">
+          <label>Archivo PDF (opcional)</label>
+          <input type="file" id="wdoc-file" class="input" accept=".pdf,.doc,.docx,.jpg,.png"/>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="saveWorkerDocument()">📤 Guardar documento</button>
+      </div>
+      <div id="worker-docs-list"></div>
+    </div>
+  </div>
+</div>
+
 <!-- SIDEBAR -->
 <nav class="sidebar">
   <div class="sidebar-brand">
@@ -264,10 +388,14 @@
     <li class="nav-item" data-page="losses">
       <span class="nav-icon">📉</span> Pérdidas
     </li>
+    <li class="nav-item" data-page="tasks" id="nav-tasks">
+      <span class="nav-icon">📋</span> Tareas
+    </li>
   </ul>
   <div class="sidebar-footer">
     <button class="sidebar-settings-btn" id="btn-cambiar-terminal" onclick="cambiarTerminal()">🖥️ Cambiar terminal</button>
     <button class="sidebar-settings-btn" id="btn-configuracion" onclick="openSettingsModal()">⚙️ Configuración</button>
+    <button class="sidebar-settings-btn" id="btn-reset-pos" onclick="openResetModal()" style="color:#ef4444;border-top:1px solid rgba(239,68,68,0.2);margin-top:4px;padding-top:10px">🔄 Reiniciar POS</button>
   </div>
 </nav>
 
@@ -352,8 +480,40 @@
             </div>
           </div>
           <div class="cart-pay-panel" id="cart-pay-panel" style="display:none">
+            <!-- Subtotal -->
+            <div class="cart-total-row" id="cart-subtotal-row" style="display:none">
+              <span style="color:var(--text-muted);font-weight:500;font-size:13px">Subtotal</span>
+              <span id="cart-subtotal" style="font-size:14px;font-weight:700">$0.00</span>
+            </div>
+            <!-- Descuento del pedido -->
+            <div id="cart-discount-row" style="display:none;padding:8px 0;border-top:1px dashed var(--border)">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+                <span style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px">Descuento</span>
+                <button onclick="clearOrderDiscount()" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:12px;font-weight:600">✕ Quitar</button>
+              </div>
+              <div style="display:flex;align-items:center;gap:6px">
+                <button id="disc-type-btn" onclick="toggleDiscountType()" style="background:var(--primary);color:#fff;border:none;border-radius:6px;padding:5px 10px;font-size:12px;font-weight:700;cursor:pointer;min-width:36px">%</button>
+                <input type="number" id="cart-discount-input" class="input input-sm" min="0" placeholder="0" oninput="applyOrderDiscount()" style="flex:1;text-align:center;font-weight:700;font-size:15px"/>
+                <span id="cart-discount-amount" style="font-size:13px;font-weight:700;color:#ef4444;min-width:60px;text-align:right">-$0</span>
+              </div>
+              <div style="display:flex;gap:5px;margin-top:6px">
+                <button onclick="quickDiscount(5)" class="disc-quick-btn">5%</button>
+                <button onclick="quickDiscount(10)" class="disc-quick-btn">10%</button>
+                <button onclick="quickDiscount(15)" class="disc-quick-btn">15%</button>
+                <button onclick="quickDiscount(20)" class="disc-quick-btn">20%</button>
+              </div>
+            </div>
+            <!-- Total final -->
             <div class="cart-total-row">
-              <span>Total</span>
+              <div style="display:flex;align-items:center;gap:8px">
+                <span>Total</span>
+                <button onclick="toggleDiscountPanel()" id="btn-add-discount" title="Aplicar descuento"
+                  style="background:none;border:1px dashed var(--border);color:var(--text-muted);border-radius:6px;padding:2px 8px;font-size:11px;font-weight:600;cursor:pointer;transition:all .15s"
+                  onmouseover="this.style.borderColor='var(--primary)';this.style.color='var(--primary)'"
+                  onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-muted)'">
+                  🏷 desc.
+                </button>
+              </div>
               <span class="cart-total" id="cart-total">$0.00</span>
             </div>
             <div class="cart-action-btns">
@@ -508,18 +668,18 @@
     <div id="caja-panel-egresos">
       <div class="stats-grid mini">
         <div class="stat-card green">
-          <div class="stat-label">Ingresos manuales del día</div>
+          <div class="stat-label" id="mov-label-in">Ingresos manuales del turno</div>
           <div class="stat-value" id="mov-total-in">$0</div>
         </div>
         <div class="stat-card red">
-          <div class="stat-label">Total egresos del día</div>
+          <div class="stat-label" id="mov-label-out">Total egresos del turno</div>
           <div class="stat-value" id="mov-total-out">$0</div>
         </div>
       </div>
       <div class="card">
         <div class="card-header-row">
           <h3 style="margin:0;font-size:15px">Movimientos manuales</h3>
-          <div style="display:flex;gap:8px;align-items:center">
+          <div id="mov-filter-row" style="display:flex;gap:8px;align-items:center">
             <input type="date" id="mov-from" class="input input-sm"/>
             <span style="color:var(--text-muted)">a</span>
             <input type="date" id="mov-to" class="input input-sm"/>
@@ -596,9 +756,67 @@
     </div>
   </section>
 
+  <!-- ═══════════════ TAREAS ═══════════════ -->
+  <section id="page-tasks" class="page">
+    <div class="page-header">
+      <h1>📋 Tareas</h1>
+    </div>
+
+    <!-- Vista admin: crear tareas + tabla -->
+    <div id="tasks-admin-view">
+      <div class="card" style="margin-bottom:20px">
+        <div class="card-title">Nueva tarea</div>
+        <div class="form-row" style="align-items:flex-end;gap:12px;flex-wrap:wrap">
+          <div class="form-group" style="flex:2;min-width:160px;margin-bottom:0">
+            <label>Función / Descripción</label>
+            <input type="text" id="task-funcion" class="input" placeholder="Ej: Limpiar mesas"/>
+          </div>
+          <div class="form-group" style="flex:1;min-width:120px;margin-bottom:0">
+            <label>Área</label>
+            <input type="text" id="task-area" class="input" placeholder="Ej: Salón"/>
+          </div>
+          <div class="form-group" style="flex:1;min-width:120px;margin-bottom:0">
+            <label>Persona responsable</label>
+            <input type="text" id="task-assigned" class="input" placeholder="Ej: María"/>
+          </div>
+          <button class="btn btn-primary" style="height:40px;white-space:nowrap" onclick="createTask()">+ Agregar tarea</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Todas las tareas</div>
+        <table class="data-table" id="tasks-admin-table">
+          <thead>
+            <tr>
+              <th>Función</th>
+              <th>Área</th>
+              <th>Responsable</th>
+              <th>Estado</th>
+              <th>Creada</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Vista trabajador: tablero de tarjetas -->
+    <div id="tasks-worker-view" style="display:none">
+      <div id="tasks-worker-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px"></div>
+      <div id="tasks-worker-empty" style="display:none;text-align:center;padding:60px 20px;color:var(--text-muted)">
+        <div style="font-size:48px;margin-bottom:12px">✅</div>
+        <div style="font-size:16px;font-weight:600">Sin tareas pendientes</div>
+        <div style="font-size:13px;margin-top:6px">No hay tareas asignadas por el momento</div>
+      </div>
+    </div>
+  </section>
+
   <!-- ═══════════════ CONTABILIDAD ═══════════════ -->
 
 </main>
+
+<!-- ═══ MODAL NUEVO TRABAJADOR ═══ -->
+<!-- modal-worker-create removed (workers are fixed: Camila, Daniela, Juan) -->
 
 <!-- ═══ MODAL CONFIGURACIÓN ═══ -->
 <div class="modal-overlay" id="modal-settings" onclick="closeModal('modal-settings')">
@@ -662,6 +880,32 @@
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeModal('modal-settings')">Cancelar</button>
       <button class="btn btn-primary" onclick="saveSettings()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL REINICIAR POS ═══ -->
+<div class="modal-overlay" id="modal-reset" onclick="closeModal('modal-reset')">
+  <div class="modal" onclick="event.stopPropagation()" style="max-width:380px">
+    <div class="modal-header" style="background:#fef2f2;border-bottom:1px solid #fecaca">
+      <h3 style="color:#dc2626">🔄 Reiniciar POS</h3>
+      <button class="modal-close" onclick="closeModal('modal-reset')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:12px;margin-bottom:16px;font-size:13px;color:#7f1d1d">
+        <strong>⚠️ Esta acción no se puede deshacer.</strong><br/>
+        <span style="color:#991b1b">Clave admin (1623):</span> borra <strong>todo</strong> — ventas, caja, contabilidad e inventario.<br/>
+        <span style="color:#b45309">Clave trabajador (0000):</span> borra solo el <strong>inventario</strong>.
+      </div>
+      <div class="form-group">
+        <label>Ingresa tu clave para confirmar</label>
+        <input type="password" id="reset-pin" class="input" placeholder="••••" maxlength="4" inputmode="numeric"
+          onkeydown="if(event.key==='Enter') confirmReset()"/>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-reset')">Cancelar</button>
+      <button class="btn btn-danger" onclick="confirmReset()">Confirmar reset</button>
     </div>
   </div>
 </div>
@@ -742,7 +986,21 @@
       </div>
       <div class="form-group">
         <label>Cantidad perdida <span id="loss-unit-label" style="color:var(--text-muted);font-weight:400"></span></label>
-        <input type="number" id="loss-quantity" class="input" placeholder="0" min="0.01" step="0.01"/>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input type="number" id="loss-quantity" class="input" placeholder="0" min="0.01" step="0.01" oninput="updateLossValue()" style="flex:1"/>
+          <span id="loss-value-preview" style="font-size:13px;color:#dc2626;font-weight:700;white-space:nowrap;min-width:90px;text-align:right"></span>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Categoría de la pérdida</label>
+        <select id="loss-category" class="input">
+          <option value="Cafetería">☕ Cafetería</option>
+          <option value="Panadería">🥐 Panadería</option>
+          <option value="Bebidas">🥤 Bebidas</option>
+          <option value="Comida">🍽️ Comida</option>
+          <option value="Insumos">📦 Insumos</option>
+          <option value="General">📋 General</option>
+        </select>
       </div>
       <div class="form-group">
         <label>Motivo de la pérdida</label>
@@ -782,6 +1040,15 @@
     </div>
     <div class="modal-body">
       <div class="form-group">
+        <label>Responsable de turno</label>
+        <div class="responsable-options" id="apertura-responsable-btns">
+          <button class="responsable-btn active" onclick="selectResponsable(this,'apertura')">🏢 Administración</button>
+          <button class="responsable-btn" onclick="selectResponsable(this,'apertura')">👩 Daniela</button>
+          <button class="responsable-btn" onclick="selectResponsable(this,'apertura')">👨 Juan</button>
+          <button class="responsable-btn" onclick="selectResponsable(this,'apertura')">👩 Camila</button>
+        </div>
+      </div>
+      <div class="form-group">
         <label>Turno</label>
         <div class="consumo-options" style="gap:10px">
           <button class="consumo-btn active" id="turno-btn-manana" onclick="seleccionarTurnoBtn(this,'manana')">☀️ Mañana</button>
@@ -790,11 +1057,14 @@
       </div>
       <div class="form-group">
         <label>Fondo inicial (efectivo en caja al abrir)</label>
-        <input type="number" id="apertura-fondo" class="input" placeholder="$0" step="1000"/>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input type="number" id="apertura-fondo" class="input" placeholder="$0" step="1000" style="flex:1"/>
+          <button class="btn-contador" onclick="abrirContadorApertura()" title="Contar billetes" style="height:42px;padding:0 12px;font-size:18px">🧮</button>
+        </div>
       </div>
       <div class="form-group">
         <label>Notas (opcional)</label>
-        <input type="text" id="apertura-notes" class="input" placeholder="Cajero, observaciones..."/>
+        <input type="text" id="apertura-notes" class="input" placeholder="Observaciones..."/>
       </div>
     </div>
     <div class="modal-footer">
@@ -815,12 +1085,21 @@
       <div id="cierre-header-totals" style="text-align:right;font-weight:700;font-size:15px"></div>
     </div>
     <div class="modal-body cierre-modal-body" id="modal-cierre-body"></div>
-    <div class="modal-footer">
-      <div style="flex:1">
-        <input type="text" id="cierre-notes" class="input" placeholder="Notas del cierre (opcional)..."/>
+    <div class="modal-footer" style="flex-direction:column;gap:10px;align-items:stretch">
+      <div class="form-group" style="margin:0">
+        <label style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px;display:block">Responsable del cierre</label>
+        <div class="responsable-options" id="cierre-responsable-btns">
+          <button class="responsable-btn active" onclick="selectResponsable(this,'cierre')">🏢 Administración</button>
+          <button class="responsable-btn" onclick="selectResponsable(this,'cierre')">👩 Daniela</button>
+          <button class="responsable-btn" onclick="selectResponsable(this,'cierre')">👨 Juan</button>
+          <button class="responsable-btn" onclick="selectResponsable(this,'cierre')">👩 Camila</button>
+        </div>
       </div>
-      <button class="btn btn-outline" onclick="closeModal('modal-cierre')">Cancelar</button>
-      <button class="btn btn-danger" id="btn-confirmar-cierre" onclick="confirmarCierre()">Cerrar caja</button>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="text" id="cierre-notes" class="input" placeholder="Notas del cierre (opcional)..." style="flex:1"/>
+        <button class="btn btn-outline" onclick="closeModal('modal-cierre')">Cancelar</button>
+        <button class="btn btn-danger" id="btn-confirmar-cierre" onclick="confirmarCierre()">Cerrar caja</button>
+      </div>
     </div>
   </div>
 </div>
@@ -863,6 +1142,42 @@
   </div>
 </div>
 
+<!-- ═══ MODAL EDITAR PRECIO ═══ -->
+<div class="modal-overlay" id="modal-edit-price" onclick="closeModal('modal-edit-price')">
+  <div class="modal" onclick="event.stopPropagation()" style="max-width:340px">
+    <div class="modal-header">
+      <h3>✏️ Modificar precio</h3>
+      <button class="modal-close" onclick="closeModal('modal-edit-price')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:13px;font-weight:700;color:var(--text-muted);margin-bottom:14px" id="edit-price-product-name"></div>
+
+      <div class="form-group">
+        <label>Nuevo precio unitario</label>
+        <input type="number" id="edit-price-input" class="input" style="font-size:20px;font-weight:800;text-align:center"
+          placeholder="$0" min="0" onkeydown="if(event.key==='Enter') applyEditPrice()"/>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:3px">
+          Precio original: <span id="edit-price-original" style="font-weight:700"></span>
+        </div>
+      </div>
+
+      <div style="margin-bottom:6px;font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px">Descuento rápido</div>
+      <div style="display:flex;gap:7px;margin-bottom:4px">
+        <button onclick="applyItemDiscountPct(5)"  class="disc-quick-btn" style="flex:1">5%</button>
+        <button onclick="applyItemDiscountPct(10)" class="disc-quick-btn" style="flex:1">10%</button>
+        <button onclick="applyItemDiscountPct(15)" class="disc-quick-btn" style="flex:1">15%</button>
+        <button onclick="applyItemDiscountPct(20)" class="disc-quick-btn" style="flex:1">20%</button>
+        <button onclick="applyItemDiscountPct(50)" class="disc-quick-btn" style="flex:1">50%</button>
+      </div>
+      <button onclick="resetItemPrice()" style="width:100%;margin-top:8px;background:none;border:1px solid var(--border);color:var(--text-muted);border-radius:7px;padding:7px;font-size:12px;font-weight:600;cursor:pointer">↺ Restablecer precio original</button>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-edit-price')">Cancelar</button>
+      <button class="btn btn-primary" onclick="applyEditPrice()">Aplicar</button>
+    </div>
+  </div>
+</div>
+
 <!-- ═══ MODAL COBRO ═══ -->
 <div class="modal-overlay" id="modal-cobro" onclick="closeModal('modal-cobro')">
   <div class="modal modal-cobro" onclick="event.stopPropagation()">
@@ -874,6 +1189,9 @@
       <div class="cobro-total-display">
         <span class="cobro-label">Total a cobrar</span>
         <span class="cobro-total" id="cobro-total-display">$0.00</span>
+        <div id="cobro-discount-info" style="display:none;margin-top:8px;font-size:12px;color:rgba(255,255,255,.6)">
+          <span id="cobro-subtotal-info"></span> &minus; <span id="cobro-discount-val" style="color:#fca5a5"></span>
+        </div>
       </div>
 
       <div class="form-group" style="margin-top:18px">
@@ -1068,6 +1386,6 @@
 
 <div class="toast" id="toast"></div>
 
-<script src="/js/app.js?v=36"></script>
+<script src="/js/app.js?v=50"></script>
 </body>
 </html>
