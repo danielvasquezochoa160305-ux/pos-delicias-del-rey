@@ -2663,17 +2663,20 @@ def send_whatsapp(phone, instance, token, message):
     except Exception as e:
         print(f'[WhatsApp GreenAPI] Error: {e}')
 
+# ─── Inicialización al arrancar (también bajo Gunicorn/producción) ───
+# Se ejecuta al importar el módulo, no solo con `python server.py`,
+# para que las tablas e índices existan cuando corre con Gunicorn.
+init_db()
+with get_db() as conn:
+    conn.executescript("""
+        CREATE INDEX IF NOT EXISTS idx_sales_created ON sales(created_at);
+        CREATE INDEX IF NOT EXISTS idx_sale_items_sale ON sale_items(sale_id);
+        CREATE INDEX IF NOT EXISTS idx_movements_created ON cash_movements(created_at);
+        CREATE INDEX IF NOT EXISTS idx_products_active ON products(active, category);
+        CREATE INDEX IF NOT EXISTS idx_comandas_status ON comandas(status);
+    """)
+
 if __name__ == '__main__':
-    init_db()
-    # Crear índices para acelerar consultas frecuentes
-    with get_db() as conn:
-        conn.executescript("""
-            CREATE INDEX IF NOT EXISTS idx_sales_created ON sales(created_at);
-            CREATE INDEX IF NOT EXISTS idx_sale_items_sale ON sale_items(sale_id);
-            CREATE INDEX IF NOT EXISTS idx_movements_created ON cash_movements(created_at);
-            CREATE INDEX IF NOT EXISTS idx_products_active ON products(active, category);
-            CREATE INDEX IF NOT EXISTS idx_comandas_status ON comandas(status);
-        """)
     print('\n✅ POS Cafetería corriendo en http://localhost:3000\n')
     port = int(os.environ.get('PORT', 3000))
     app.run(host='0.0.0.0', port=port, debug=False, threaded=True)
