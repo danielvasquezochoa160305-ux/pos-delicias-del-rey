@@ -30,9 +30,11 @@ def init_db():
             name TEXT NOT NULL,
             category TEXT NOT NULL DEFAULT 'General',
             price REAL NOT NULL,
+            cost REAL NOT NULL DEFAULT 0,
             stock REAL NOT NULL DEFAULT 0,
             unit TEXT NOT NULL DEFAULT 'unidad',
             low_stock_alert REAL NOT NULL DEFAULT 5,
+            infinite_stock INTEGER NOT NULL DEFAULT 0,
             active INTEGER NOT NULL DEFAULT 1,
             created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
         );
@@ -298,6 +300,18 @@ def init_db():
         # Agrega columna image si no existe (migración)
         try:
             conn.execute('ALTER TABLE products ADD COLUMN image TEXT DEFAULT NULL')
+        except Exception:
+            pass
+
+        # Migración: agregar cost a products
+        try:
+            conn.execute('ALTER TABLE products ADD COLUMN cost REAL NOT NULL DEFAULT 0')
+        except Exception:
+            pass
+
+        # Migración: agregar infinite_stock a products
+        try:
+            conn.execute('ALTER TABLE products ADD COLUMN infinite_stock INTEGER NOT NULL DEFAULT 0')
         except Exception:
             pass
 

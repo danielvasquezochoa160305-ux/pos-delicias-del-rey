@@ -8,6 +8,9 @@ set -e
 APP_DIR=/opt/pos-cafeteria
 cd "$APP_DIR"
 
+# Evita el error "dubious ownership" de Git (el repo es de www-data, esto corre como root)
+git config --global --add safe.directory "$APP_DIR" 2>/dev/null || true
+
 echo "==> Descargando últimos cambios..."
 git pull
 
