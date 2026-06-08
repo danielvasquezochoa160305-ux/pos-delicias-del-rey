@@ -3,6 +3,11 @@ __pycache__/
 *.pyo
 node_modules/
 .env
+*.db
 *.db-shm
 *.db-wal
 .DS_Store
+venv/
+.venv/
+public/uploads/
+backups/

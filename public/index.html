@@ -7,7 +7,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
   <link href="https://fonts.googleapis.com/css2?family=Pacifico&family=Barlow+Condensed:wght@400;600;700;800&display=swap" rel="stylesheet"/>
-  <link rel="stylesheet" href="/css/style.css?v=57"/>
+  <link rel="stylesheet" href="/css/style.css?v=66"/>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 </head>
 <body>
 
@@ -391,7 +392,22 @@
     <li class="nav-item" data-page="tasks" id="nav-tasks">
       <span class="nav-icon">📋</span> Tareas
     </li>
+    <li class="nav-item" data-page="checklist" id="nav-checklist">
+      <span class="nav-icon">✅</span> Checklist
+    </li>
+    <li class="nav-item" data-page="reception" id="nav-reception">
+      <span class="nav-icon">📥</span> Recepción
+      <span class="nav-badge" id="nav-reception-badge" style="display:none">0</span>
+    </li>
   </ul>
+  <!-- Botón novedades en sidebar -->
+  <div style="padding:8px 12px 4px">
+    <button class="nov-sidebar-btn" id="nov-sidebar-btn" onclick="openNovedadesPanel()">
+      <span>📢</span>
+      <span style="flex:1">Novedades</span>
+      <span class="nov-sidebar-badge" id="nov-sidebar-badge" style="display:none">0</span>
+    </button>
+  </div>
   <div class="sidebar-footer">
     <button class="sidebar-settings-btn" id="btn-cambiar-terminal" onclick="cambiarTerminal()">🖥️ Cambiar terminal</button>
     <button class="sidebar-settings-btn" id="btn-configuracion" onclick="openSettingsModal()">⚙️ Configuración</button>
@@ -434,6 +450,74 @@
         <div class="stat-label">Balance</div>
         <div class="stat-value" id="dash-balance">$0</div>
         <div class="stat-sub">neto del día</div>
+      </div>
+    </div>
+
+    <!-- Descargar informes -->
+    <div class="card report-card" style="margin-bottom:20px">
+      <div class="card-title">📑 Descargar informes</div>
+      <div class="report-grid">
+
+        <!-- Diario -->
+        <div class="report-item">
+          <div class="report-item-icon">📅</div>
+          <div class="report-item-body">
+            <div class="report-item-title">Informe diario</div>
+            <div class="report-item-desc">Ventas, productos, egresos, checklist, novedades y pérdidas de un día</div>
+            <div class="report-item-controls">
+              <input type="date" id="report-daily-date" class="input" style="flex:1;max-width:180px"/>
+              <button class="btn btn-primary" onclick="downloadReport('daily')">⬇ Descargar</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Semanal -->
+        <div class="report-item">
+          <div class="report-item-icon">📆</div>
+          <div class="report-item-body">
+            <div class="report-item-title">Informe semanal</div>
+            <div class="report-item-desc">Ventas por día, top productos, horas pico, cierres, pérdidas, novedades y trabajadores</div>
+            <div class="report-item-controls">
+              <input type="date" id="report-weekly-date" class="input" style="flex:1;max-width:180px"/>
+              <button class="btn btn-primary" onclick="downloadReport('weekly')">⬇ Descargar</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Mensual -->
+        <div class="report-item">
+          <div class="report-item-icon">📊</div>
+          <div class="report-item-body">
+            <div class="report-item-title">Informe mensual</div>
+            <div class="report-item-desc">Todas las estadísticas del mes: ventas diarias, semanas, productos, caja, descuadres, pérdidas y más</div>
+            <div class="report-item-controls">
+              <input type="month" id="report-monthly-month" class="input" style="flex:1;max-width:180px"/>
+              <button class="btn btn-primary" onclick="downloadReport('monthly')">⬇ Descargar</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Gráfico ventas por hora -->
+    <div class="card" style="margin-bottom:20px">
+      <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+        <span>📈 Nivel de ventas por hora — hoy</span>
+        <div style="display:flex;gap:8px;align-items:center">
+          <div class="dash-hora-legend">
+            <span class="dash-hora-dot ventas"></span> Tickets
+            <span class="dash-hora-dot total" style="margin-left:10px"></span> Ingresos
+          </div>
+          <span id="dash-hora-pico" class="dash-hora-pico-badge" style="display:none"></span>
+        </div>
+      </div>
+      <div style="position:relative;height:220px">
+        <canvas id="chart-ventas-hora"></canvas>
+        <div id="chart-hora-empty" style="display:none;position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--text-muted)">
+          <span style="font-size:32px">📊</span>
+          <span style="font-size:13px;margin-top:6px">Sin ventas registradas hoy</span>
+        </div>
       </div>
     </div>
 
@@ -712,7 +796,10 @@
   <section id="page-inventory" class="page">
     <div class="page-header">
       <h1>Inventario</h1>
-      <button class="btn btn-primary btn-sm" onclick="openProductModal()">+ Producto</button>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-outline btn-sm" onclick="openImportModal()">📥 Importar Excel</button>
+        <button class="btn btn-primary btn-sm" onclick="openProductModal()">+ Producto</button>
+      </div>
     </div>
     <div class="card">
       <table class="data-table" id="inventory-table">
@@ -811,9 +898,223 @@
     </div>
   </section>
 
+  <!-- ═══════════════ CHECKLIST TURNO ═══════════════ -->
+  <section id="page-checklist" class="page">
+    <div class="page-header">
+      <h1>✅ Checklist de Turno</h1>
+      <div id="cl-admin-actions" style="display:none">
+        <button class="btn btn-primary" onclick="toggleAddForm(true)">+ Agregar función</button>
+      </div>
+    </div>
+
+    <!-- Tabs apertura / cierre / aseo -->
+    <div class="checklist-tab-bar">
+      <button class="checklist-tab active" id="ctab-apertura" onclick="switchChecklistTab('apertura')">
+        🌅 Apertura
+      </button>
+      <button class="checklist-tab" id="ctab-cierre" onclick="switchChecklistTab('cierre')">
+        🌆 Cierre
+      </button>
+      <button class="checklist-tab" id="ctab-aseo" onclick="switchChecklistTab('aseo')">
+        🧹 Aseo semanal
+      </button>
+    </div>
+
+    <!-- Formulario nueva función (solo admin) -->
+    <div id="cl-add-form" class="cl-add-form" style="display:none">
+      <div class="cl-add-inner">
+        <div class="cl-add-title">+ Nueva función</div>
+        <div class="cl-add-fields">
+          <div class="form-group" style="flex:1.5;min-width:140px;margin-bottom:0">
+            <label>Descripción</label>
+            <input type="text" id="cl-new-text" class="input" placeholder="Ej: Revisar cámara de seguridad" onkeydown="if(event.key==='Enter') saveChecklistItem()"/>
+          </div>
+          <div class="form-group" style="flex:1;min-width:130px;margin-bottom:0">
+            <label>Sección</label>
+            <input type="text" id="cl-new-section" class="input" placeholder="Ej: Antes de abrir"/>
+          </div>
+          <button class="btn btn-primary" style="height:40px;white-space:nowrap;align-self:flex-end" onclick="saveChecklistItem()">Agregar</button>
+          <button class="btn" style="height:40px;align-self:flex-end" onclick="toggleAddForm(false)">Cancelar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Contenido del checklist activo -->
+    <div id="checklist-content">
+      <!-- Progress bar -->
+      <div class="cl-progress-wrap">
+        <div class="cl-progress-header">
+          <span id="cl-progress-label">0 de 0 tareas completadas</span>
+          <span id="cl-progress-pct" class="cl-pct-badge">0%</span>
+        </div>
+        <div class="cl-progress-bar-bg">
+          <div class="cl-progress-bar-fill" id="cl-progress-fill" style="width:0%"></div>
+        </div>
+      </div>
+
+      <!-- Fecha -->
+      <div class="cl-date-row">
+        <label>Fecha:</label>
+        <input type="date" id="cl-date" class="input" style="width:auto;max-width:180px" onchange="loadChecklist()"/>
+        <span id="cl-today-badge" class="cl-today-badge">Hoy</span>
+      </div>
+
+      <!-- Sections container -->
+      <div id="cl-sections"></div>
+    </div>
+
+    <!-- ── Sección Aseo Semanal ── -->
+    <div id="aseo-content" style="display:none">
+
+      <!-- Barra de días -->
+      <div class="aseo-days-bar" id="aseo-days-bar">
+        <button class="aseo-day-btn" data-dia="lunes"     onclick="switchAseoDia('lunes')">Lun</button>
+        <button class="aseo-day-btn" data-dia="martes"    onclick="switchAseoDia('martes')">Mar</button>
+        <button class="aseo-day-btn" data-dia="miercoles" onclick="switchAseoDia('miercoles')">Mié</button>
+        <button class="aseo-day-btn" data-dia="jueves"    onclick="switchAseoDia('jueves')">Jue</button>
+        <button class="aseo-day-btn" data-dia="viernes"   onclick="switchAseoDia('viernes')">Vie</button>
+        <button class="aseo-day-btn" data-dia="sabado"    onclick="switchAseoDia('sabado')">Sáb</button>
+      </div>
+
+      <!-- Progreso del día seleccionado -->
+      <div class="cl-progress-wrap" style="margin-bottom:14px">
+        <div class="cl-progress-header">
+          <span id="aseo-progress-label">0 de 0 tareas completadas</span>
+          <span id="aseo-progress-pct" class="cl-pct-badge">0%</span>
+        </div>
+        <div class="cl-progress-bar-bg">
+          <div class="cl-progress-bar-fill" id="aseo-progress-fill" style="width:0%"></div>
+        </div>
+      </div>
+
+      <!-- Formulario agregar (admin) -->
+      <div id="aseo-add-form" class="cl-add-form" style="display:none">
+        <div class="cl-add-inner">
+          <div class="cl-add-title">+ Nueva tarea de aseo</div>
+          <div class="cl-add-fields">
+            <div class="form-group" style="flex:2;min-width:180px;margin-bottom:0">
+              <label>Descripción</label>
+              <input type="text" id="aseo-new-text" class="input" placeholder="Ej: Limpiar filtros de aire" onkeydown="if(event.key==='Enter') saveAseoItem()"/>
+            </div>
+            <button class="btn btn-primary" style="height:40px;white-space:nowrap;align-self:flex-end" onclick="saveAseoItem()">Agregar</button>
+            <button class="btn" style="height:40px;align-self:flex-end" onclick="toggleAseoAddForm(false)">Cancelar</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Items del día -->
+      <div class="cl-section">
+        <div class="cl-section-header" id="aseo-section-header">
+          <span id="aseo-dia-label">Lunes</span>
+          <div style="margin-left:auto;display:flex;align-items:center;gap:10px">
+            <span class="cl-section-count" id="aseo-section-count">0/0</span>
+            <button id="aseo-add-btn" class="btn btn-primary" style="display:none;padding:4px 14px;font-size:12px;height:28px" onclick="toggleAseoAddForm(true)">+ Agregar</button>
+          </div>
+        </div>
+        <div id="aseo-items-list"></div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ═══════════════ RECEPCIÓN DE INSUMOS ═══════════════ -->
+  <section id="page-reception" class="page">
+    <div class="page-header">
+      <h1>📥 Recepción de insumos</h1>
+      <div id="rec-admin-actions" style="display:none">
+        <button class="btn btn-primary" onclick="openRecepcionModal()">+ Registrar insumo por llegar</button>
+      </div>
+    </div>
+
+    <p class="rec-intro" id="rec-intro">Aquí ves lo que va a llegar al negocio. Marca cada insumo cuando lo recibas.</p>
+
+    <!-- Tabs Por llegar / Recibidos -->
+    <div class="checklist-tab-bar">
+      <button class="checklist-tab active" id="rtab-pendiente" onclick="switchRecepcionTab('pendiente')">
+        ⏳ Por llegar <span class="rec-tab-count" id="rec-count-pendiente">0</span>
+      </button>
+      <button class="checklist-tab" id="rtab-recibido" onclick="switchRecepcionTab('recibido')">
+        ✅ Recibidos <span class="rec-tab-count" id="rec-count-recibido">0</span>
+      </button>
+    </div>
+
+    <!-- Lista de insumos -->
+    <div id="rec-list" class="rec-list"></div>
+  </section>
+
   <!-- ═══════════════ CONTABILIDAD ═══════════════ -->
 
 </main>
+
+<!-- ═══ MODAL REGISTRAR INSUMO (admin) ═══ -->
+<div class="modal-overlay" id="modal-recepcion" onclick="closeModal('modal-recepcion')">
+  <div class="modal" onclick="event.stopPropagation()" style="max-width:480px">
+    <div class="modal-header">
+      <h3>📥 Insumo por llegar</h3>
+      <button class="modal-close" onclick="closeModal('modal-recepcion')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>¿Qué va a llegar? *</label>
+        <input type="text" id="rec-descripcion" class="input" placeholder="Ej: Caja de leche entera"/>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Cantidad</label>
+          <input type="text" id="rec-cantidad" class="input" placeholder="Ej: 2 cajas / 10 kg"/>
+        </div>
+        <div class="form-group">
+          <label>Proveedor</label>
+          <input type="text" id="rec-proveedor" class="input" placeholder="Ej: Alpina"/>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Fecha estimada de llegada</label>
+        <input type="date" id="rec-fecha" class="input"/>
+      </div>
+      <div class="form-group">
+        <label>Foto (opcional)</label>
+        <div class="rec-photo-drop" id="rec-photo-drop" onclick="document.getElementById('rec-foto-input').click()">
+          <input type="file" id="rec-foto-input" accept="image/*" style="display:none" onchange="handleRecPhotoSelect(event)"/>
+          <div id="rec-photo-placeholder">
+            <span style="font-size:30px">🖼️</span>
+            <div style="font-size:13px;color:var(--text-muted);margin-top:6px">Toca para tomar o subir una foto</div>
+          </div>
+          <img id="rec-photo-preview" style="display:none;max-width:100%;max-height:180px;border-radius:10px"/>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-recepcion')">Cancelar</button>
+      <button class="btn btn-primary" id="rec-save-btn" onclick="saveRecepcion()">Registrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL MARCAR RECIBIDO (trabajador) ═══ -->
+<div class="modal-overlay" id="modal-recibir" onclick="closeModal('modal-recibir')">
+  <div class="modal" onclick="event.stopPropagation()" style="max-width:420px">
+    <div class="modal-header">
+      <h3>✅ Confirmar recepción</h3>
+      <button class="modal-close" onclick="closeModal('modal-recibir')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div id="recibir-resumen" class="recibir-resumen"></div>
+      <div class="form-group">
+        <label>¿Quién recibe?</label>
+        <div class="nov-persona-grid" id="recibir-persona-grid"></div>
+      </div>
+      <div class="form-group">
+        <label>Observación (opcional)</label>
+        <input type="text" id="recibir-nota" class="input" placeholder="Ej: Llegó 1 caja en mal estado"/>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-recibir')">Cancelar</button>
+      <button class="btn btn-primary" onclick="confirmarRecepcion()">Confirmar recibido</button>
+    </div>
+  </div>
+</div>
 
 <!-- ═══ MODAL NUEVO TRABAJADOR ═══ -->
 <!-- modal-worker-create removed (workers are fixed: Camila, Daniela, Juan) -->
@@ -1384,8 +1685,118 @@
   <div id="ticket-content"></div>
 </div>
 
+<!-- ═══ MODAL IMPORTAR INVENTARIO ═══ -->
+<div class="modal-overlay" id="modal-import" onclick="closeModal('modal-import')">
+  <div class="modal" onclick="event.stopPropagation()" style="max-width:520px">
+    <div class="modal-header">
+      <h3 class="modal-title">📥 Importar inventario desde Excel</h3>
+      <button class="modal-close" onclick="closeModal('modal-import')">&times;</button>
+    </div>
+    <div class="modal-body">
+
+      <!-- Paso 1: descargar plantilla -->
+      <div class="import-step">
+        <div class="import-step-num">1</div>
+        <div class="import-step-body">
+          <div class="import-step-title">Descarga la plantilla</div>
+          <div class="import-step-desc">Rellena la plantilla con tus productos. No cambies los encabezados.</div>
+          <a href="/api/products/template" download class="btn btn-outline" style="margin-top:10px;display:inline-flex;align-items:center;gap:6px;font-size:13px">
+            📄 Descargar plantilla.xlsx
+          </a>
+        </div>
+      </div>
+
+      <!-- Paso 2: subir archivo -->
+      <div class="import-step">
+        <div class="import-step-num">2</div>
+        <div class="import-step-body">
+          <div class="import-step-title">Sube tu archivo Excel</div>
+          <div class="import-step-desc">Formatos aceptados: .xlsx · .xls</div>
+          <div class="import-drop-area" id="import-drop-area" onclick="document.getElementById('import-file-input').click()"
+               ondragover="event.preventDefault();this.classList.add('drag')"
+               ondragleave="this.classList.remove('drag')"
+               ondrop="handleImportDrop(event)">
+            <div id="import-drop-placeholder">
+              <span style="font-size:36px">📂</span>
+              <span style="font-size:14px;font-weight:600;margin-top:8px">Haz clic o arrastra tu archivo aquí</span>
+              <span style="font-size:12px;color:var(--text-muted);margin-top:4px" id="import-file-name">Ningún archivo seleccionado</span>
+            </div>
+          </div>
+          <input type="file" id="import-file-input" accept=".xlsx,.xls" style="display:none" onchange="handleImportFileSelect(event)"/>
+        </div>
+      </div>
+
+      <!-- Resultado -->
+      <div id="import-result" style="display:none"></div>
+
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-import')">Cerrar</button>
+      <button class="btn btn-primary" id="import-submit-btn" onclick="submitImport()" disabled>📥 Importar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ BOTÓN FLOTANTE NOVEDADES ═══ -->
+<button class="nov-fab" id="nov-fab" onclick="openNovedadesPanel()" title="Novedades">
+  <span class="nov-fab-icon">📢</span>
+  <span class="nov-fab-badge" id="nov-fab-badge" style="display:none">0</span>
+</button>
+
+<!-- ═══ PANEL NOVEDADES (admin) ═══ -->
+<div class="nov-panel-overlay" id="nov-panel-overlay" onclick="closeNovedadesPanel()" style="display:none"></div>
+<div class="nov-panel" id="nov-panel" style="display:none">
+  <div class="nov-panel-header">
+    <div>
+      <div class="nov-panel-title">📢 Novedades</div>
+      <div class="nov-panel-sub" id="nov-panel-sub">Sin novedades nuevas</div>
+    </div>
+    <button class="nov-panel-close" onclick="closeNovedadesPanel()">✕</button>
+  </div>
+  <div class="nov-panel-body" id="nov-panel-list">
+    <div class="nov-empty">Sin novedades registradas</div>
+  </div>
+</div>
+
+<!-- ═══ MODAL REGISTRAR NOVEDAD ═══ -->
+<div class="modal-overlay" id="modal-novedad" onclick="closeModal('modal-novedad')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h3 class="modal-title">📢 Registrar novedad</h3>
+      <button class="modal-close" onclick="closeModal('modal-novedad')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <!-- Selector de persona -->
+      <div id="nov-persona-row" style="margin-bottom:16px">
+        <label style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:8px">¿Quién reporta?</label>
+        <div class="nov-persona-grid" id="nov-persona-grid">
+          <button class="nov-persona-btn" data-nombre="Camila"  onclick="selectNovedadPersona(this)">👩<br>Camila</button>
+          <button class="nov-persona-btn" data-nombre="Daniela" onclick="selectNovedadPersona(this)">👩‍🦱<br>Daniela</button>
+          <button class="nov-persona-btn" data-nombre="Juan"    onclick="selectNovedadPersona(this)">👨<br>Juan</button>
+          <button class="nov-persona-btn" data-nombre="Admin"   onclick="selectNovedadPersona(this)" id="nov-persona-admin">👑<br>Admin</button>
+        </div>
+      </div>
+
+      <div class="nov-tipo-grid" id="nov-tipo-grid">
+        <button class="nov-tipo-btn active" data-tipo="agotado"     onclick="selectNovedadTipo(this)">🛒<br>Se agotó</button>
+        <button class="nov-tipo-btn"        data-tipo="dañado"      onclick="selectNovedadTipo(this)">🔧<br>Se dañó</button>
+        <button class="nov-tipo-btn"        data-tipo="recordatorio" onclick="selectNovedadTipo(this)">🔔<br>Recordatorio</button>
+        <button class="nov-tipo-btn"        data-tipo="otro"        onclick="selectNovedadTipo(this)">📋<br>Otro</button>
+      </div>
+      <div class="form-group" style="margin-top:16px;margin-bottom:0">
+        <label>Descripción</label>
+        <textarea id="nov-descripcion" class="input" rows="3" placeholder="Ej: Se agotó el café molido, quedan solo 2 paquetes..." style="resize:vertical"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-novedad')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveNovedad()">📢 Registrar</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
-<script src="/js/app.js?v=50"></script>
+<script src="/js/app.js?v=59"></script>
 </body>
 </html>

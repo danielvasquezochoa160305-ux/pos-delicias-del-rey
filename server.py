@@ -1,10 +1,13 @@
 import sqlite3
 import json
 import os
+import io
 import urllib.request
 import urllib.parse
 from datetime import datetime
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, send_file
+import openpyxl
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
 app = Flask(__name__, static_folder='public')
 DB_PATH = os.path.join(os.path.dirname(__file__), 'pos.db')
@@ -211,6 +214,55 @@ def init_db():
             created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
             completed_at TEXT
         );
+        CREATE TABLE IF NOT EXISTS checklist_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            turno TEXT NOT NULL CHECK(turno IN ('apertura','cierre')),
+            section TEXT NOT NULL DEFAULT '',
+            text TEXT NOT NULL,
+            order_num INTEGER NOT NULL DEFAULT 0,
+            active INTEGER NOT NULL DEFAULT 1
+        );
+        CREATE TABLE IF NOT EXISTS checklist_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            date TEXT NOT NULL,
+            turno TEXT NOT NULL,
+            item_id INTEGER NOT NULL,
+            completed_by TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+            UNIQUE(date, turno, item_id)
+        );
+        """)
+
+        # Tabla de novedades
+        conn.executescript("""
+        CREATE TABLE IF NOT EXISTS novedades (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tipo TEXT NOT NULL DEFAULT 'otro',
+            descripcion TEXT NOT NULL,
+            reportado_por TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+            visto INTEGER NOT NULL DEFAULT 0
+        );
+        """)
+
+        # Tabla de aseo semanal
+        conn.executescript("""
+        CREATE TABLE IF NOT EXISTS aseo_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            dia TEXT NOT NULL,
+            text TEXT NOT NULL,
+            order_num INTEGER NOT NULL DEFAULT 0,
+            active INTEGER NOT NULL DEFAULT 1
+        );
+        CREATE TABLE IF NOT EXISTS aseo_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            date TEXT NOT NULL,
+            dia TEXT NOT NULL,
+            item_id INTEGER NOT NULL,
+            completed_by TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+            UNIQUE(date, dia, item_id)
+        );
         """)
 
         # Tabla de documentos de trabajadores
@@ -224,6 +276,23 @@ def init_db():
             description TEXT NOT NULL DEFAULT '',
             created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
             FOREIGN KEY (worker_id) REFERENCES workers(id)
+        )""")
+
+        # Tabla de recepción de insumos
+        conn.execute("""
+        CREATE TABLE IF NOT EXISTS recepciones (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            descripcion TEXT NOT NULL,
+            cantidad TEXT NOT NULL DEFAULT '',
+            proveedor TEXT NOT NULL DEFAULT '',
+            foto TEXT NOT NULL DEFAULT '',
+            fecha_esperada TEXT NOT NULL DEFAULT '',
+            estado TEXT NOT NULL DEFAULT 'pendiente',
+            recibido_por TEXT NOT NULL DEFAULT '',
+            recibido_at TEXT,
+            nota_recepcion TEXT NOT NULL DEFAULT '',
+            created_by TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
         )""")
 
         # Agrega columna image si no existe (migración)
@@ -249,6 +318,65 @@ def init_db():
             conn.execute("ALTER TABLE losses ADD COLUMN category TEXT NOT NULL DEFAULT ''")
         except Exception:
             pass
+
+        # Seed aseo semanal (solo si la tabla está vacía)
+        if conn.execute('SELECT COUNT(*) FROM aseo_items').fetchone()[0] == 0:
+            aseo_seed = [
+                ('lunes',     'Limpieza detrás de todos los electrónicos',                            1),
+                ('lunes',     'Limpieza y organización de caja de almacenamiento',                    2),
+                ('martes',    'Lavado de contenedores de azúcar y mezcladores',                       1),
+                ('martes',    'Limpieza de equipos (sonido, cámaras, computador, caja de menuda)',    2),
+                ('miercoles', 'Lavado de máquina de café',                                            1),
+                ('jueves',    'Barrido y trapeado de pisos en áreas de cocina y atención al cliente', 1),
+                ('viernes',   'Limpieza profunda del mesón de acero, cocina y máquinas (zona arriba y abajo)', 1),
+                ('sabado',    'Limpieza de horno',                                                    1),
+                ('sabado',    'Limpieza de nevera',                                                   2),
+                ('sabado',    'Limpieza y organización de estantes de almacenamiento',                3),
+            ]
+            conn.executemany(
+                'INSERT INTO aseo_items (dia, text, order_num) VALUES (?,?,?)',
+                aseo_seed
+            )
+
+        # Seed checklist items (solo si la tabla está vacía)
+        if conn.execute('SELECT COUNT(*) FROM checklist_items').fetchone()[0] == 0:
+            apertura_items = [
+                ('apertura', 'Antes de abrir', 'El turno anterior lo realizó correctamente', 1),
+                ('apertura', 'Antes de abrir', 'Fritos y pasteles en exhibición', 2),
+                ('apertura', 'Antes de abrir', 'Jugeras con insumo', 3),
+                ('apertura', 'Antes de abrir', 'TVs y música prendidos', 4),
+                ('apertura', 'Antes de abrir', 'Máquinas de café funcionando y con producto recargado', 5),
+                ('apertura', 'Antes de abrir', 'Cortinas bien subidas', 6),
+                ('apertura', 'Antes de abrir', 'Mesas organizadas y limpias', 7),
+                ('apertura', 'Antes de abrir', 'Insumos recargados', 8),
+                ('apertura', 'Antes de abrir', 'Caja base verificada y POS activo', 9),
+                ('apertura', 'Antes de abrir', 'Vitrina y nevera bien surtidas', 10),
+            ]
+            cierre_items = [
+                ('cierre', 'Limpieza y aseo', 'Lavar tanques de máquinas y jugeras', 1),
+                ('cierre', 'Limpieza y aseo', 'Limpiar externamente la máquina de café y los hornos', 2),
+                ('cierre', 'Limpieza y aseo', 'Lavar todos los elementos sucios — platos, charolas, tapetes de horneo, pinzas y utensilios', 3),
+                ('cierre', 'Limpieza y aseo', 'Lavar y dejar desinfectados los trapos', 4),
+                ('cierre', 'Limpieza y aseo', 'Limpiar la vitrina interna y externamente', 5),
+                ('cierre', 'Limpieza y aseo', 'Barrer y trapear todo el local', 6),
+                ('cierre', 'Limpieza y aseo', 'Entrar las mesas y sillas', 7),
+                ('cierre', 'Producto e inventario', 'Guardar el producto sobrante en el congelador', 8),
+                ('cierre', 'Producto e inventario', 'Registrar los sobrantes del día — producto, cantidad y estado', 9),
+                ('cierre', 'Producto e inventario', 'Verificar que no quede nada fuera sin guardar', 10),
+                ('cierre', 'Caja y sistema', 'Realizar el cierre de caja en el sistema', 11),
+                ('cierre', 'Caja y sistema', 'Mandar la foto del cierre al administrador', 12),
+                ('cierre', 'Caja y sistema', 'Verificar el efectivo y la caja de menuda', 13),
+                ('cierre', 'Cierre del local', 'Apagar la máquina de café correctamente', 14),
+                ('cierre', 'Cierre del local', 'Apagar los hornos y verificar que estén fríos', 15),
+                ('cierre', 'Cierre del local', 'Apagar televisores, sonido y luces', 16),
+                ('cierre', 'Cierre del local', 'Asegurar puertas, vitrinas y cajones con llave', 17),
+                ('cierre', 'Registro final', 'Registrar novedades del turno — caja, inventario, equipos, clientes o personal', 18),
+                ('cierre', 'Registro final', 'Llenar este checklist completamente', 19),
+            ]
+            conn.executemany(
+                'INSERT INTO checklist_items (turno, section, text, order_num) VALUES (?,?,?,?)',
+                apertura_items + cierre_items
+            )
 
         # Seed trabajadores fijos
         for wname, wcargo in [('Camila', 'Empleada'), ('Daniela', 'Empleada'), ('Juan', 'Empleado')]:
@@ -367,6 +495,183 @@ def create_product():
         )
         row = conn.execute('SELECT * FROM products WHERE id=?', (cur.lastrowid,)).fetchone()
     return jsonify(row_to_dict(row))
+
+@app.route('/api/products/template', methods=['GET'])
+def download_inventory_template():
+    """Genera y descarga la plantilla Excel para importación masiva."""
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = 'Inventario'
+
+    # Estilos
+    header_fill = PatternFill('solid', fgColor='FC4C02')
+    header_font = Font(bold=True, color='FFFFFF', size=11)
+    center      = Alignment(horizontal='center', vertical='center')
+    thin        = Side(border_style='thin', color='D1D5DB')
+    border      = Border(left=thin, right=thin, top=thin, bottom=thin)
+
+    headers = ['Nombre *', 'Categoría', 'Precio Venta *', 'Precio Costo', 'Stock', 'Unidad', 'Alerta Stock Bajo', 'Stock Infinito (SI/NO)']
+    widths  = [30, 16, 16, 14, 10, 12, 18, 20]
+
+    for col, (h, w) in enumerate(zip(headers, widths), 1):
+        cell = ws.cell(row=1, column=col, value=h)
+        cell.fill      = header_fill
+        cell.font      = header_font
+        cell.alignment = center
+        cell.border    = border
+        ws.column_dimensions[openpyxl.utils.get_column_letter(col)].width = w
+
+    ws.row_dimensions[1].height = 28
+
+    # Filas de ejemplo
+    examples = [
+        ('Café americano', 'Bebidas', 4500, 1200, 100, 'unidad', 10, 'NO'),
+        ('Croissant mantequilla', 'Panadería', 3800, 900, 50, 'unidad', 5, 'NO'),
+        ('Jugo de naranja', 'Bebidas', 5000, 1500, 0, 'unidad', 5, 'SI'),
+        ('Agua natural 500ml', 'Bebidas', 2000, 600, 200, 'unidad', 20, 'NO'),
+    ]
+    eg_font = Font(size=10, color='374151')
+    eg_fill = PatternFill('solid', fgColor='F9FAFB')
+    eg_fill2 = PatternFill('solid', fgColor='FFFFFF')
+
+    for row_i, ex in enumerate(examples, 2):
+        fill = eg_fill if row_i % 2 == 0 else eg_fill2
+        for col_i, val in enumerate(ex, 1):
+            cell = ws.cell(row=row_i, column=col_i, value=val)
+            cell.font   = eg_font
+            cell.fill   = fill
+            cell.border = border
+
+    # Hoja de instrucciones
+    ws2 = wb.create_sheet('Instrucciones')
+    ws2['A1'] = '📋 INSTRUCCIONES DE IMPORTACIÓN'
+    ws2['A1'].font = Font(bold=True, size=13, color='FC4C02')
+    instrucciones = [
+        ('', ''),
+        ('Columna', 'Descripción'),
+        ('Nombre *', 'Nombre del producto. OBLIGATORIO.'),
+        ('Categoría', 'Categoría del producto (ej: Bebidas, Panadería). Default: General'),
+        ('Precio Venta *', 'Precio de venta en pesos. OBLIGATORIO. Solo números.'),
+        ('Precio Costo', 'Precio de costo/compra. Default: 0'),
+        ('Stock', 'Cantidad en inventario. Default: 0'),
+        ('Unidad', 'Unidad de medida (unidad, kg, litro, etc.). Default: unidad'),
+        ('Alerta Stock Bajo', 'Cantidad mínima antes de alertar. Default: 5'),
+        ('Stock Infinito (SI/NO)', 'SI = producto sin límite de stock. NO = controla stock. Default: NO'),
+        ('', ''),
+        ('⚠️ IMPORTANTE', 'No borrar ni mover la fila de encabezados (fila 1)'),
+        ('⚠️ IMPORTANTE', 'Si el producto ya existe (mismo nombre exacto), se actualizará'),
+        ('⚠️ IMPORTANTE', 'Si es nuevo, se creará automáticamente'),
+    ]
+    for r, (col_a, col_b) in enumerate(instrucciones, 2):
+        ws2.cell(row=r, column=1, value=col_a).font = Font(bold=True, size=10)
+        ws2.cell(row=r, column=2, value=col_b).font = Font(size=10)
+    ws2.column_dimensions['A'].width = 28
+    ws2.column_dimensions['B'].width = 60
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return send_file(
+        buf,
+        as_attachment=True,
+        download_name='plantilla_inventario.xlsx',
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+
+@app.route('/api/products/import', methods=['POST'])
+def import_inventory():
+    """Importa productos desde un archivo Excel."""
+    if 'file' not in request.files:
+        return jsonify({'error': 'No se recibió archivo'}), 400
+    f = request.files['file']
+    if not f.filename.lower().endswith(('.xlsx', '.xls')):
+        return jsonify({'error': 'Solo se aceptan archivos .xlsx o .xls'}), 400
+
+    try:
+        wb = openpyxl.load_workbook(io.BytesIO(f.read()), data_only=True)
+        ws = wb.active
+    except Exception as e:
+        return jsonify({'error': f'No se pudo leer el archivo: {str(e)}'}), 400
+
+    # Detectar columnas por encabezado (fila 1)
+    headers = {}
+    for col in ws.iter_cols(min_row=1, max_row=1):
+        cell = col[0]
+        if cell.value:
+            key = str(cell.value).strip().lower()
+            # Normalizar
+            if 'nombre' in key:           headers['name']             = cell.column - 1
+            elif 'categorí' in key or 'categoria' in key: headers['category'] = cell.column - 1
+            elif 'venta' in key or 'precio v' in key:     headers['price']    = cell.column - 1
+            elif 'costo' in key or 'precio c' in key:     headers['cost']     = cell.column - 1
+            elif 'stock bajo' in key or 'alerta' in key:  headers['low_stock_alert'] = cell.column - 1
+            elif 'infinito' in key:        headers['infinite_stock']   = cell.column - 1
+            elif 'stock' in key:           headers['stock']            = cell.column - 1
+            elif 'unidad' in key:          headers['unit']             = cell.column - 1
+
+    if 'name' not in headers or 'price' not in headers:
+        return jsonify({'error': 'El archivo debe tener columnas "Nombre" y "Precio Venta"'}), 400
+
+    created = 0
+    updated = 0
+    errors  = []
+
+    with get_db() as conn:
+        for row_i, row in enumerate(ws.iter_rows(min_row=2, values_only=True), 2):
+            if not any(row):
+                continue  # fila vacía
+            def col(k, default=None):
+                idx = headers.get(k)
+                return row[idx] if idx is not None and idx < len(row) else default
+
+            name = str(col('name', '')).strip() if col('name') else ''
+            if not name:
+                continue
+
+            try:
+                price    = float(str(col('price', 0)).replace(',','.').replace(' ','') or 0)
+            except:
+                errors.append(f'Fila {row_i}: precio inválido para "{name}"')
+                continue
+
+            category = str(col('category', 'General') or 'General').strip()
+            try:
+                cost = float(str(col('cost', 0) or 0).replace(',','.').replace(' ',''))
+            except: cost = 0
+            try:
+                stock = int(float(str(col('stock', 0) or 0).replace(',','.').replace(' ','')))
+            except: stock = 0
+            unit = str(col('unit', 'unidad') or 'unidad').strip()
+            try:
+                low_stock_alert = int(float(str(col('low_stock_alert', 5) or 5)))
+            except: low_stock_alert = 5
+            inf_val = str(col('infinite_stock', 'NO') or 'NO').strip().upper()
+            infinite_stock = 1 if inf_val in ('SI', 'SÍ', 'YES', '1', 'TRUE') else 0
+
+            existing = conn.execute(
+                'SELECT id FROM products WHERE LOWER(name)=LOWER(?) AND active=1', (name,)
+            ).fetchone()
+
+            if existing:
+                conn.execute(
+                    'UPDATE products SET category=?,price=?,cost=?,stock=?,unit=?,low_stock_alert=?,infinite_stock=? WHERE id=?',
+                    (category, price, cost, stock, unit, low_stock_alert, infinite_stock, existing['id'])
+                )
+                updated += 1
+            else:
+                conn.execute(
+                    'INSERT INTO products (name,category,price,cost,stock,unit,low_stock_alert,infinite_stock) VALUES (?,?,?,?,?,?,?,?)',
+                    (name, category, price, cost, stock, unit, low_stock_alert, infinite_stock)
+                )
+                created += 1
+
+    return jsonify({
+        'ok': True,
+        'created': created,
+        'updated': updated,
+        'errors': errors,
+        'total': created + updated
+    })
 
 @app.route('/api/products/<int:pid>/image', methods=['POST'])
 def upload_product_image(pid):
@@ -542,6 +847,23 @@ def dashboard():
             GROUP BY dia ORDER BY dia
         """).fetchall()
 
+        # Ventas por hora del día de hoy (0-23)
+        ventas_hora_raw = conn.execute("""
+            SELECT CAST(strftime('%H', created_at) AS INTEGER) as hora,
+                   COUNT(*) as ventas,
+                   COALESCE(SUM(total), 0) as total
+            FROM sales
+            WHERE date(created_at) = date(?)
+            GROUP BY hora ORDER BY hora
+        """, (today,)).fetchall()
+
+    # Rellenar las 24 horas (0-23) con 0 si no hay datos
+    hora_map = {r['hora']: {'ventas': r['ventas'], 'total': r['total']} for r in ventas_hora_raw}
+    ventas_por_hora = [
+        {'hora': h, 'ventas': hora_map.get(h, {}).get('ventas', 0), 'total': hora_map.get(h, {}).get('total', 0)}
+        for h in range(24)
+    ]
+
     return jsonify({
         'ventasHoy': ventas['count'],
         'totalHoy': ventas['total'],
@@ -551,7 +873,569 @@ def dashboard():
         'bajoStock': rows_to_list(bajo_stock),
         'topProductos': rows_to_list(top_productos),
         'ventasSemana': rows_to_list(ventas_semana),
+        'ventasPorHora': ventas_por_hora,
     })
+
+# ─── REPORTES ────────────────────────────────────────────────────────────────
+def _wb_style():
+    """Retorna funciones de estilo reutilizables."""
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side, numbers
+    ORANGE  = 'FC4C02'; DARK = '1E293B'; LIGHT = 'F8FAFC'; GRAY = 'E2E8F0'
+    PURPLE  = '6366F1'; GREEN = '16A34A'; RED = 'DC2626'
+    thin = Side(border_style='thin', color='D1D5DB')
+    brd  = Border(left=thin, right=thin, top=thin, bottom=thin)
+    def hdr(ws, row, cols, fill_hex=ORANGE, font_hex='FFFFFF', height=26):
+        fill = PatternFill('solid', fgColor=fill_hex)
+        font = Font(bold=True, color=font_hex, size=11)
+        align = Alignment(horizontal='center', vertical='center', wrap_text=True)
+        for col, val in enumerate(cols, 1):
+            c = ws.cell(row=row, column=col, value=val)
+            c.fill = fill; c.font = font; c.alignment = align; c.border = brd
+        ws.row_dimensions[row].height = height
+    def cell(ws, r, c, val, bold=False, color=DARK, align='left', fmt=None, fill_hex=None):
+        cl = ws.cell(row=r, column=c, value=val)
+        cl.font = Font(size=10, bold=bold, color=color)
+        cl.alignment = Alignment(horizontal=align, vertical='center')
+        cl.border = brd
+        if fill_hex: cl.fill = PatternFill('solid', fgColor=fill_hex)
+        if fmt:      cl.number_format = fmt
+        return cl
+    def title(ws, text, subtitle=''):
+        ws['A1'] = text; ws['A1'].font = Font(bold=True, size=16, color=ORANGE)
+        ws['A1'].alignment = Alignment(horizontal='left')
+        if subtitle:
+            ws['A2'] = subtitle; ws['A2'].font = Font(size=11, color='64748B')
+        return 3 if subtitle else 2
+    def col_w(ws, widths):
+        for i, w in enumerate(widths, 1):
+            ws.column_dimensions[openpyxl.utils.get_column_letter(i)].width = w
+    def fmt_cop(v): return f"${v:,.0f}".replace(',','.')
+    return hdr, cell, title, col_w, fmt_cop, ORANGE, DARK, GRAY, PURPLE, GREEN, RED, brd
+
+@app.route('/api/reports/daily', methods=['GET'])
+def report_daily():
+    date = request.args.get('date', datetime.now().strftime('%Y-%m-%d'))
+    hdr, cell, title_fn, col_w, fmt_cop, ORANGE, DARK, GRAY, PURPLE, GREEN, RED, brd = _wb_style()
+    wb = openpyxl.Workbook()
+
+    with get_db() as conn:
+        # ── RESUMEN ──
+        ventas = conn.execute("SELECT COUNT(*) c, COALESCE(SUM(total),0) t, COALESCE(SUM(subtotal),0) s FROM sales WHERE date(created_at)=?", (date,)).fetchone()
+        ingresos = conn.execute("SELECT COALESCE(SUM(amount),0) t FROM cash_movements WHERE type='ingreso' AND date(created_at)=?", (date,)).fetchone()
+        egresos  = conn.execute("SELECT COALESCE(SUM(amount),0) t FROM cash_movements WHERE type='egreso'  AND date(created_at)=?", (date,)).fetchone()
+        cierre   = conn.execute("SELECT * FROM cash_registers WHERE date(opened_at)=? ORDER BY opened_at DESC LIMIT 1", (date,)).fetchone()
+
+        # ── VENTAS POR PRODUCTO ──
+        productos = conn.execute("""SELECT si.product_name, SUM(si.quantity) qty, SUM(si.subtotal) subtotal
+            FROM sale_items si JOIN sales s ON s.id=si.sale_id
+            WHERE date(s.created_at)=? GROUP BY si.product_name ORDER BY subtotal DESC""", (date,)).fetchall()
+
+        # ── VENTAS POR HORA ──
+        por_hora = conn.execute("""SELECT CAST(strftime('%H', created_at) AS INTEGER) h,
+            COUNT(*) c, COALESCE(SUM(total),0) t FROM sales WHERE date(created_at)=?
+            GROUP BY h ORDER BY h""", (date,)).fetchall()
+
+        # ── EGRESOS ──
+        movs_egreso = conn.execute("""SELECT description, amount, created_at FROM cash_movements
+            WHERE type='egreso' AND date(created_at)=? ORDER BY created_at""", (date,)).fetchall()
+
+        # ── TAREAS ──
+        tareas = conn.execute("""SELECT funcion, area, assigned_to, status, created_at FROM tasks
+            WHERE date(created_at)=? ORDER BY status""", (date,)).fetchall()
+
+        # ── PÉRDIDAS ──
+        perdidas = conn.execute("""SELECT product_name, category, quantity, sale_value, responsible, reason, created_at
+            FROM losses WHERE date(created_at)=? ORDER BY created_at""", (date,)).fetchall()
+
+        # ── CHECKLIST ──
+        cl_apertura = conn.execute("""SELECT ci.text, cl.completed_by, cl.created_at FROM checklist_items ci
+            LEFT JOIN checklist_logs cl ON cl.item_id=ci.id AND cl.date=? AND cl.turno='apertura'
+            WHERE ci.turno='apertura' AND ci.active=1 ORDER BY ci.order_num""", (date,)).fetchall()
+        cl_cierre = conn.execute("""SELECT ci.text, cl.completed_by, cl.created_at FROM checklist_items ci
+            LEFT JOIN checklist_logs cl ON cl.item_id=ci.id AND cl.date=? AND cl.turno='cierre'
+            WHERE ci.turno='cierre' AND ci.active=1 ORDER BY ci.order_num""", (date,)).fetchall()
+
+        # ── NOVEDADES ──
+        novedades = conn.execute("""SELECT tipo, descripcion, reportado_por, created_at FROM novedades
+            WHERE date(created_at)=? ORDER BY created_at""", (date,)).fetchall()
+
+    # Hoja 1 — Resumen
+    ws = wb.active; ws.title = '📊 Resumen'
+    col_w(ws, [28, 18, 18, 18, 18])
+    start = title_fn(ws, f'Informe Diario — {date}', f'Generado el {datetime.now().strftime("%Y-%m-%d %H:%M")}')
+    r = start
+    hdr(ws, r, ['INDICADOR', 'VALOR']); r += 1
+    datos_resumen = [
+        ('Total tickets vendidos', ventas['c']),
+        ('Total ventas (bruto)',   ventas['t']),
+        ('Total ingresos en caja', ingresos['t']),
+        ('Total egresos en caja',  egresos['t']),
+        ('Balance del día',        ingresos['t'] - egresos['t']),
+    ]
+    if cierre:
+        datos_resumen += [
+            ('Base apertura caja', cierre['opening_balance'] if cierre else 0),
+            ('Diferencia cierre',  cierre['difference'] if cierre else 0),
+        ]
+    fills = ['FFFFFF','F8FAFC']
+    for i, (k, v) in enumerate(datos_resumen):
+        fill = fills[i % 2]
+        cell(ws, r, 1, k, bold=True, fill_hex=fill)
+        is_money = isinstance(v, float) or (isinstance(v, int) and 'Total' in k or 'Base' in k or 'Difer' in k or 'ingreso' in k or 'egreso' in k or 'Balance' in k)
+        cell(ws, r, 2, v, bold=True, color=ORANGE if 'Balance' in k else DARK, align='right', fill_hex=fill)
+        ws.cell(r, 2).number_format = '$#,##0'
+        r += 1
+
+    # Hoja 2 — Productos
+    ws2 = wb.create_sheet('🛒 Productos')
+    col_w(ws2, [32, 12, 18, 14])
+    title_fn(ws2, 'Ventas por producto', date)
+    r2 = 3
+    hdr(ws2, r2, ['PRODUCTO', 'CANTIDAD', 'SUBTOTAL', '% DEL TOTAL']); r2 += 1
+    total_vtas = sum(p['subtotal'] for p in productos) or 1
+    for i, p in enumerate(productos):
+        fill = 'FFFFFF' if i%2==0 else 'F8FAFC'
+        pct = round(p['subtotal'] / total_vtas * 100, 1)
+        cell(ws2, r2, 1, p['product_name'], fill_hex=fill)
+        cell(ws2, r2, 2, int(p['qty']), align='center', fill_hex=fill)
+        cell(ws2, r2, 3, p['subtotal'], align='right', fill_hex=fill); ws2.cell(r2,3).number_format='$#,##0'
+        cell(ws2, r2, 4, f'{pct}%', align='center', fill_hex=fill)
+        r2 += 1
+    if productos:
+        hdr(ws2, r2, ['TOTAL', int(sum(p['qty'] for p in productos)), ventas['s'], '100%'], fill_hex='1E293B')
+        ws2.cell(r2,3).number_format='$#,##0'
+
+    # Hoja 3 — Por hora
+    ws3 = wb.create_sheet('⏰ Por hora')
+    col_w(ws3, [14, 12, 18])
+    title_fn(ws3, 'Comportamiento de ventas por hora', date)
+    r3 = 3
+    hdr(ws3, r3, ['HORA', 'TICKETS', 'INGRESOS']); r3 += 1
+    hora_map = {p['h']: p for p in por_hora}
+    for h in range(7, 22):
+        p = hora_map.get(h, {'c': 0, 't': 0})
+        fill = 'FFF3EE' if p['c'] == max((x['c'] for x in por_hora), default=0) and p['c'] > 0 else ('FFFFFF' if h%2==0 else 'F8FAFC')
+        cell(ws3, r3, 1, f'{h:02d}:00', align='center', fill_hex=fill)
+        cell(ws3, r3, 2, p['c'], align='center', fill_hex=fill)
+        cell(ws3, r3, 3, p['t'], align='right', fill_hex=fill); ws3.cell(r3,3).number_format='$#,##0'
+        r3 += 1
+
+    # Hoja 4 — Egresos
+    ws4 = wb.create_sheet('💸 Egresos')
+    col_w(ws4, [36, 16, 18])
+    title_fn(ws4, 'Egresos del día', date)
+    r4 = 3
+    hdr(ws4, r4, ['CONCEPTO', 'MONTO', 'HORA']); r4 += 1
+    for i, e in enumerate(movs_egreso):
+        fill = 'FFFFFF' if i%2==0 else 'F8FAFC'
+        cell(ws4, r4, 1, e['description'] or '—', fill_hex=fill)
+        cell(ws4, r4, 2, e['amount'], align='right', fill_hex=fill, color=RED); ws4.cell(r4,2).number_format='$#,##0'
+        cell(ws4, r4, 3, str(e['created_at'])[11:16], align='center', fill_hex=fill)
+        r4 += 1
+    if movs_egreso:
+        hdr(ws4, r4, ['TOTAL', egresos['t'], ''], fill_hex='1E293B')
+        ws4.cell(r4,2).number_format='$#,##0'
+
+    # Hoja 5 — Checklist
+    ws5 = wb.create_sheet('✅ Checklist')
+    col_w(ws5, [42, 12, 18])
+    title_fn(ws5, 'Checklist del día', date)
+    r5 = 3
+    for turno_label, items in [('🌅 APERTURA', cl_apertura), ('🌆 CIERRE', cl_cierre)]:
+        hdr(ws5, r5, [turno_label, 'ESTADO', 'COMPLETADO POR'], fill_hex='334155'); r5 += 1
+        completados = sum(1 for x in items if x['completed_by'])
+        for i, it in enumerate(items):
+            done = bool(it['completed_by'])
+            fill = 'F0FDF4' if done else 'FFFFFF' if i%2==0 else 'F8FAFC'
+            cell(ws5, r5, 1, it['text'], fill_hex=fill)
+            cell(ws5, r5, 2, '✅ Hecho' if done else '⬜ Pendiente', align='center', fill_hex=fill, color=GREEN if done else '94A3B8')
+            cell(ws5, r5, 3, it['completed_by'] or '—', align='center', fill_hex=fill)
+            r5 += 1
+        hdr(ws5, r5, [f'Completados: {completados}/{len(items)}', f'{round(completados/len(items)*100) if items else 0}%', ''], fill_hex='E2E8F0', font_hex='374151'); r5 += 2
+
+    # Hoja 6 — Novedades & Pérdidas
+    ws6 = wb.create_sheet('📢 Novedades')
+    col_w(ws6, [16, 42, 16, 16])
+    title_fn(ws6, 'Novedades y Pérdidas', date)
+    r6 = 3
+    hdr(ws6, r6, ['TIPO', 'DESCRIPCIÓN', 'REPORTADO POR', 'HORA']); r6 += 1
+    for i, n in enumerate(novedades):
+        fill = 'FFFFFF' if i%2==0 else 'F8FAFC'
+        cell(ws6, r6, 1, n['tipo'].upper(), align='center', fill_hex=fill)
+        cell(ws6, r6, 2, n['descripcion'], fill_hex=fill)
+        cell(ws6, r6, 3, n['reportado_por'], align='center', fill_hex=fill)
+        cell(ws6, r6, 4, str(n['created_at'])[11:16], align='center', fill_hex=fill)
+        r6 += 1
+    if not novedades:
+        cell(ws6, r6, 1, 'Sin novedades registradas', color='94A3B8')
+    r6 += 1
+    hdr(ws6, r6, ['PRODUCTO', 'CATEGORÍA', 'CANTIDAD', 'VALOR VENTA', 'RESPONSABLE', 'MOTIVO'], fill_hex='334155'); r6 += 1
+    ws6.column_dimensions['E'].width = 16; ws6.column_dimensions['F'].width = 28
+    for i, p in enumerate(perdidas):
+        fill = 'FEF2F2' if i%2==0 else 'FFFFFF'
+        cell(ws6, r6, 1, p['product_name'], fill_hex=fill)
+        cell(ws6, r6, 2, p['category'] or '—', align='center', fill_hex=fill)
+        cell(ws6, r6, 3, p['quantity'], align='center', fill_hex=fill)
+        cell(ws6, r6, 4, p['sale_value'] or 0, align='right', fill_hex=fill, color=RED); ws6.cell(r6,4).number_format='$#,##0'
+        cell(ws6, r6, 5, p['responsible'] or '—', align='center', fill_hex=fill)
+        cell(ws6, r6, 6, p['reason'] or '—', fill_hex=fill)
+        r6 += 1
+    if not perdidas: cell(ws6, r6, 1, 'Sin pérdidas registradas', color='94A3B8')
+
+    buf = io.BytesIO(); wb.save(buf); buf.seek(0)
+    fname = f'informe_diario_{date}.xlsx'
+    return send_file(buf, as_attachment=True, download_name=fname,
+                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+
+@app.route('/api/reports/weekly', methods=['GET'])
+def report_weekly():
+    date_str = request.args.get('date', datetime.now().strftime('%Y-%m-%d'))
+    hdr, cell, title_fn, col_w, fmt_cop, ORANGE, DARK, GRAY, PURPLE, GREEN, RED, brd = _wb_style()
+    wb = openpyxl.Workbook()
+
+    with get_db() as conn:
+        # Semana: lunes a domingo del periodo
+        from datetime import timedelta
+        ref = datetime.strptime(date_str, '%Y-%m-%d')
+        lunes = ref - timedelta(days=ref.weekday())
+        domingo = lunes + timedelta(days=6)
+        d_ini = lunes.strftime('%Y-%m-%d'); d_fin = domingo.strftime('%Y-%m-%d')
+
+        dias_semana = conn.execute("""SELECT date(created_at) dia, COUNT(*) tickets, COALESCE(SUM(total),0) total
+            FROM sales WHERE date(created_at) BETWEEN ? AND ? GROUP BY dia ORDER BY dia""", (d_ini, d_fin)).fetchall()
+        egresos_sem = conn.execute("""SELECT date(created_at) dia, COALESCE(SUM(amount),0) total
+            FROM cash_movements WHERE type='egreso' AND date(created_at) BETWEEN ? AND ? GROUP BY dia ORDER BY dia""", (d_ini, d_fin)).fetchall()
+        ingresos_sem = conn.execute("""SELECT date(created_at) dia, COALESCE(SUM(amount),0) total
+            FROM cash_movements WHERE type='ingreso' AND date(created_at) BETWEEN ? AND ? GROUP BY dia ORDER BY dia""", (d_ini, d_fin)).fetchall()
+        top_prods = conn.execute("""SELECT si.product_name, SUM(si.quantity) qty, SUM(si.subtotal) total
+            FROM sale_items si JOIN sales s ON s.id=si.sale_id
+            WHERE date(s.created_at) BETWEEN ? AND ? GROUP BY si.product_name ORDER BY total DESC LIMIT 20""", (d_ini, d_fin)).fetchall()
+        por_hora_sem = conn.execute("""SELECT CAST(strftime('%H', created_at) AS INTEGER) h,
+            COUNT(*) tickets, COALESCE(SUM(total),0) total
+            FROM sales WHERE date(created_at) BETWEEN ? AND ?
+            GROUP BY h ORDER BY h""", (d_ini, d_fin)).fetchall()
+        cierres = conn.execute("""SELECT opened_at, closed_at, opening_balance, closing_balance, difference, notes
+            FROM cash_registers WHERE date(opened_at) BETWEEN ? AND ? ORDER BY opened_at""", (d_ini, d_fin)).fetchall()
+        perdidas_sem = conn.execute("""SELECT product_name, category, quantity, sale_value, responsible, reason, created_at
+            FROM losses WHERE date(created_at) BETWEEN ? AND ? ORDER BY created_at""", (d_ini, d_fin)).fetchall()
+        novedades_sem = conn.execute("""SELECT tipo, descripcion, reportado_por, created_at
+            FROM novedades WHERE date(created_at) BETWEEN ? AND ? ORDER BY created_at""", (d_ini, d_fin)).fetchall()
+        tareas_sem = conn.execute("""SELECT funcion, area, assigned_to, status FROM tasks
+            WHERE date(created_at) BETWEEN ? AND ?""", (d_ini, d_fin)).fetchall()
+        workers_perdidas = conn.execute("""SELECT responsible, COUNT(*) cnt, COALESCE(SUM(sale_value),0) total
+            FROM losses WHERE date(created_at) BETWEEN ? AND ? AND responsible IS NOT NULL AND responsible!=''
+            GROUP BY responsible ORDER BY total DESC""", (d_ini, d_fin)).fetchall()
+
+    semana_label = f'{d_ini} → {d_fin}'
+
+    # Hoja 1 — Resumen semanal
+    ws = wb.active; ws.title = '📊 Resumen'
+    col_w(ws, [16, 12, 18, 16, 16, 16, 16])
+    title_fn(ws, f'Informe Semanal — {semana_label}', f'Generado el {datetime.now().strftime("%Y-%m-%d %H:%M")}')
+    r = 3
+    hdr(ws, r, ['DÍA', 'TICKETS', 'VENTAS', 'INGRESOS', 'EGRESOS', 'BALANCE', 'VARIACIÓN']); r += 1
+    egr_map = {e['dia']: e['total'] for e in egresos_sem}
+    ing_map = {e['dia']: e['total'] for e in ingresos_sem}
+    dias_nombres = {'Monday':'Lunes','Tuesday':'Martes','Wednesday':'Miércoles','Thursday':'Jueves','Friday':'Viernes','Saturday':'Sábado','Sunday':'Domingo'}
+    total_tickets = total_ventas = total_ingresos = total_egresos = 0
+    prev_total = None
+    for i in range(7):
+        d = (lunes + timedelta(days=i)).strftime('%Y-%m-%d')
+        dia_nom = dias_nombres.get((lunes + timedelta(days=i)).strftime('%A'), d)
+        dia_data = next((x for x in dias_semana if x['dia'] == d), None)
+        t = dia_data['tickets'] if dia_data else 0
+        v = dia_data['total']   if dia_data else 0
+        ing = ing_map.get(d, 0); egr = egr_map.get(d, 0); bal = ing - egr
+        var = ''
+        if prev_total is not None and prev_total > 0: var = f'{round((v-prev_total)/prev_total*100,1)}%'
+        fill = 'FFF3EE' if v == max((x['total'] for x in dias_semana), default=0) and v > 0 else ('FFFFFF' if i%2==0 else 'F8FAFC')
+        cell(ws, r, 1, f'{dia_nom} {d[8:]}', bold=True, fill_hex=fill)
+        cell(ws, r, 2, t, align='center', fill_hex=fill)
+        cell(ws, r, 3, v, align='right', fill_hex=fill); ws.cell(r,3).number_format='$#,##0'
+        cell(ws, r, 4, ing, align='right', fill_hex=fill); ws.cell(r,4).number_format='$#,##0'
+        cell(ws, r, 5, egr, align='right', fill_hex=fill, color=RED); ws.cell(r,5).number_format='$#,##0'
+        cell(ws, r, 6, bal, align='right', fill_hex=fill, color=GREEN if bal>=0 else RED, bold=True); ws.cell(r,6).number_format='$#,##0'
+        cell(ws, r, 7, var, align='center', fill_hex=fill)
+        total_tickets+=t; total_ventas+=v; total_ingresos+=ing; total_egresos+=egr; prev_total=v; r+=1
+    hdr(ws, r, ['TOTAL SEMANA', total_tickets, total_ventas, total_ingresos, total_egresos, total_ingresos-total_egresos, ''], fill_hex='1E293B')
+    for c in [3,4,5,6]: ws.cell(r,c).number_format='$#,##0'
+
+    # Hoja 2 — Top productos
+    ws2 = wb.create_sheet('🛒 Top Productos')
+    col_w(ws2, [34, 12, 18, 14, 12])
+    title_fn(ws2, 'Productos más vendidos', semana_label)
+    r2 = 3
+    hdr(ws2, r2, ['PRODUCTO', 'CANTIDAD', 'TOTAL', '% PARTICIPACIÓN', 'RANKING']); r2 += 1
+    tot_p = sum(p['total'] for p in top_prods) or 1
+    for i, p in enumerate(top_prods):
+        fill = 'FFF3EE' if i==0 else 'FFFFFF' if i%2==0 else 'F8FAFC'
+        pct = round(p['total']/tot_p*100,1)
+        cell(ws2, r2, 1, p['product_name'], bold=(i==0), fill_hex=fill)
+        cell(ws2, r2, 2, int(p['qty']), align='center', fill_hex=fill)
+        cell(ws2, r2, 3, p['total'], align='right', fill_hex=fill); ws2.cell(r2,3).number_format='$#,##0'
+        cell(ws2, r2, 4, f'{pct}%', align='center', fill_hex=fill)
+        medal = ['🥇','🥈','🥉'] ; cell(ws2, r2, 5, medal[i] if i<3 else str(i+1), align='center', fill_hex=fill)
+        r2 += 1
+
+    # Hoja 3 — Comportamiento por hora
+    ws3 = wb.create_sheet('⏰ Horas Pico')
+    col_w(ws3, [14, 14, 18])
+    title_fn(ws3, 'Comportamiento por hora (semana)', semana_label)
+    r3 = 3; hdr(ws3, r3, ['HORA', 'TICKETS TOTAL', 'INGRESOS TOTAL']); r3 += 1
+    hora_map = {p['h']: p for p in por_hora_sem}
+    max_t = max((p['tickets'] for p in por_hora_sem), default=0)
+    for h in range(6, 22):
+        p = hora_map.get(h, {'tickets':0,'total':0})
+        fill = 'FFF3EE' if p['tickets']==max_t and max_t>0 else ('FFFFFF' if h%2==0 else 'F8FAFC')
+        bar = '█' * min(int(p['tickets']/(max_t or 1)*10), 10) if p['tickets'] else ''
+        cell(ws3, r3, 1, f'{h:02d}:00', align='center', fill_hex=fill)
+        cell(ws3, r3, 2, f"{p['tickets']}  {bar}", fill_hex=fill)
+        cell(ws3, r3, 3, p['total'], align='right', fill_hex=fill); ws3.cell(r3,3).number_format='$#,##0'
+        r3 += 1
+
+    # Hoja 4 — Cierres de caja
+    ws4 = wb.create_sheet('💰 Cierres de caja')
+    col_w(ws4, [20, 20, 16, 16, 16, 32])
+    title_fn(ws4, 'Cierres de caja', semana_label)
+    r4 = 3; hdr(ws4, r4, ['APERTURA', 'CIERRE', 'BASE', 'CIERRE REAL', 'DIFERENCIA', 'NOTAS']); r4 += 1
+    for i, c in enumerate(cierres):
+        fill = 'FEF2F2' if (c['difference'] or 0) < 0 else 'F0FDF4' if i%2==0 else 'FFFFFF'
+        cell(ws4, r4, 1, str(c['opened_at'])[:16], align='center', fill_hex=fill)
+        cell(ws4, r4, 2, str(c['closed_at'] or '—')[:16], align='center', fill_hex=fill)
+        cell(ws4, r4, 3, c['opening_balance'] or 0, align='right', fill_hex=fill); ws4.cell(r4,3).number_format='$#,##0'
+        cell(ws4, r4, 4, c['closing_balance'] or 0, align='right', fill_hex=fill); ws4.cell(r4,4).number_format='$#,##0'
+        dif = c['difference'] or 0
+        cell(ws4, r4, 5, dif, align='right', fill_hex=fill, bold=True, color=RED if dif<0 else GREEN); ws4.cell(r4,5).number_format='$#,##0'
+        cell(ws4, r4, 6, c['notes'] or '—', fill_hex=fill)
+        r4 += 1
+
+    # Hoja 5 — Pérdidas
+    ws5 = wb.create_sheet('📉 Pérdidas')
+    col_w(ws5, [28, 16, 10, 16, 16, 28])
+    title_fn(ws5, 'Pérdidas de la semana', semana_label)
+    r5 = 3; hdr(ws5, r5, ['PRODUCTO', 'CATEGORÍA', 'CANT.', 'VALOR VENTA', 'RESPONSABLE', 'MOTIVO']); r5 += 1
+    for i, p in enumerate(perdidas_sem):
+        fill = 'FFFFFF' if i%2==0 else 'F8FAFC'
+        cell(ws5, r5, 1, p['product_name'], fill_hex=fill)
+        cell(ws5, r5, 2, p['category'] or '—', align='center', fill_hex=fill)
+        cell(ws5, r5, 3, p['quantity'], align='center', fill_hex=fill)
+        cell(ws5, r5, 4, p['sale_value'] or 0, align='right', fill_hex=fill, color=RED); ws5.cell(r5,4).number_format='$#,##0'
+        cell(ws5, r5, 5, p['responsible'] or '—', align='center', fill_hex=fill)
+        cell(ws5, r5, 6, p['reason'] or '—', fill_hex=fill); r5 += 1
+    if perdidas_sem:
+        hdr(ws5, r5, ['TOTAL', '', sum(p['quantity'] for p in perdidas_sem), sum(p['sale_value'] or 0 for p in perdidas_sem), '', ''], fill_hex='1E293B')
+        ws5.cell(r5,4).number_format='$#,##0'
+
+    # Hoja 6 — Pérdidas por trabajador
+    ws6 = wb.create_sheet('👥 Trabajadores')
+    col_w(ws6, [20, 14, 18])
+    title_fn(ws6, 'Pérdidas por trabajador', semana_label)
+    r6 = 3; hdr(ws6, r6, ['TRABAJADOR', 'N° PÉRDIDAS', 'VALOR TOTAL']); r6 += 1
+    for i, w in enumerate(workers_perdidas):
+        fill = 'FFFFFF' if i%2==0 else 'F8FAFC'
+        cell(ws6, r6, 1, w['responsible'], bold=True, fill_hex=fill)
+        cell(ws6, r6, 2, w['cnt'], align='center', fill_hex=fill)
+        cell(ws6, r6, 3, w['total'], align='right', fill_hex=fill, color=RED); ws6.cell(r6,3).number_format='$#,##0'
+        r6 += 1
+
+    # Hoja 7 — Novedades
+    ws7 = wb.create_sheet('📢 Novedades')
+    col_w(ws7, [16, 42, 16, 18])
+    title_fn(ws7, 'Novedades de la semana', semana_label)
+    r7 = 3; hdr(ws7, r7, ['TIPO', 'DESCRIPCIÓN', 'REPORTADO POR', 'FECHA/HORA']); r7 += 1
+    for i, n in enumerate(novedades_sem):
+        fill = 'FFFFFF' if i%2==0 else 'F8FAFC'
+        cell(ws7, r7, 1, n['tipo'].upper(), align='center', fill_hex=fill)
+        cell(ws7, r7, 2, n['descripcion'], fill_hex=fill)
+        cell(ws7, r7, 3, n['reportado_por'], align='center', fill_hex=fill)
+        cell(ws7, r7, 4, str(n['created_at'])[:16], align='center', fill_hex=fill); r7 += 1
+    if not novedades_sem: cell(ws7, r7, 1, 'Sin novedades', color='94A3B8')
+
+    buf = io.BytesIO(); wb.save(buf); buf.seek(0)
+    return send_file(buf, as_attachment=True, download_name=f'informe_semanal_{d_ini}.xlsx',
+                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+
+@app.route('/api/reports/monthly', methods=['GET'])
+def report_monthly():
+    month = request.args.get('month', datetime.now().strftime('%Y-%m'))
+    year, mon = int(month.split('-')[0]), int(month.split('-')[1])
+    import calendar
+    last_day = calendar.monthrange(year, mon)[1]
+    d_ini = f'{month}-01'; d_fin = f'{month}-{last_day:02d}'
+    month_label = datetime(year, mon, 1).strftime('%B %Y').capitalize()
+    hdr, cell, title_fn, col_w, fmt_cop, ORANGE, DARK, GRAY, PURPLE, GREEN, RED, brd = _wb_style()
+    wb = openpyxl.Workbook()
+
+    with get_db() as conn:
+        dias = conn.execute("""SELECT date(created_at) dia, COUNT(*) tickets, COALESCE(SUM(total),0) total
+            FROM sales WHERE date(created_at) BETWEEN ? AND ? GROUP BY dia ORDER BY dia""", (d_ini, d_fin)).fetchall()
+        egr_mes = conn.execute("""SELECT date(created_at) dia, COALESCE(SUM(amount),0) t
+            FROM cash_movements WHERE type='egreso' AND date(created_at) BETWEEN ? AND ? GROUP BY dia""", (d_ini, d_fin)).fetchall()
+        ing_mes = conn.execute("""SELECT date(created_at) dia, COALESCE(SUM(amount),0) t
+            FROM cash_movements WHERE type='ingreso' AND date(created_at) BETWEEN ? AND ? GROUP BY dia""", (d_ini, d_fin)).fetchall()
+        top_prods = conn.execute("""SELECT si.product_name, SUM(si.quantity) qty, SUM(si.subtotal) total
+            FROM sale_items si JOIN sales s ON s.id=si.sale_id
+            WHERE date(s.created_at) BETWEEN ? AND ? GROUP BY si.product_name ORDER BY total DESC""", (d_ini, d_fin)).fetchall()
+        por_hora = conn.execute("""SELECT CAST(strftime('%H', created_at) AS INTEGER) h,
+            COUNT(*) tickets, COALESCE(SUM(total),0) total
+            FROM sales WHERE date(created_at) BETWEEN ? AND ? GROUP BY h ORDER BY h""", (d_ini, d_fin)).fetchall()
+        cierres = conn.execute("""SELECT opened_at, closing_balance, difference, notes
+            FROM cash_registers WHERE date(opened_at) BETWEEN ? AND ? ORDER BY opened_at""", (d_ini, d_fin)).fetchall()
+        perdidas = conn.execute("""SELECT product_name, category, quantity, sale_value, responsible, reason, created_at
+            FROM losses WHERE date(created_at) BETWEEN ? AND ? ORDER BY created_at""", (d_ini, d_fin)).fetchall()
+        novedades = conn.execute("""SELECT tipo, descripcion, reportado_por, created_at
+            FROM novedades WHERE date(created_at) BETWEEN ? AND ? ORDER BY created_at""", (d_ini, d_fin)).fetchall()
+        workers_stats = conn.execute("""SELECT responsible, COUNT(*) cnt, COALESCE(SUM(sale_value),0) total
+            FROM losses WHERE date(created_at) BETWEEN ? AND ? AND responsible IS NOT NULL AND responsible!=''
+            GROUP BY responsible ORDER BY total DESC""", (d_ini, d_fin)).fetchall()
+        descuadres = conn.execute("""SELECT difference, opened_at FROM cash_registers
+            WHERE date(opened_at) BETWEEN ? AND ? AND difference < 0 ORDER BY opened_at""", (d_ini, d_fin)).fetchall()
+        semanas_data = []
+        from datetime import timedelta as td
+        ref = datetime(year, mon, 1)
+        sem_start = ref
+        while sem_start.month == mon:
+            sem_end = min(sem_start + td(days=6), datetime(year, mon, last_day))
+            row_s = conn.execute("""SELECT COUNT(*) tickets, COALESCE(SUM(total),0) total FROM sales
+                WHERE date(created_at) BETWEEN ? AND ?""",
+                (sem_start.strftime('%Y-%m-%d'), sem_end.strftime('%Y-%m-%d'))).fetchone()
+            semanas_data.append({'label': f'{sem_start.strftime("%d/%m")}–{sem_end.strftime("%d/%m")}',
+                                 'tickets': row_s['tickets'], 'total': row_s['total']})
+            sem_start = sem_start + td(days=7)
+
+    # Hoja 1 — Resumen mensual
+    ws = wb.active; ws.title = '📊 Resumen Mensual'
+    col_w(ws, [16, 12, 18, 16, 16, 16, 12])
+    title_fn(ws, f'Informe Mensual — {month_label}', f'Periodo: {d_ini} → {d_fin}  |  Generado: {datetime.now().strftime("%Y-%m-%d %H:%M")}')
+    r = 3
+    dias_nombres = {'Monday':'Lun','Tuesday':'Mar','Wednesday':'Mié','Thursday':'Jue','Friday':'Vie','Saturday':'Sáb','Sunday':'Dom'}
+    hdr(ws, r, ['FECHA', 'DÍA', 'TICKETS', 'VENTAS', 'INGRESOS', 'EGRESOS', 'BALANCE']); r += 1
+    dia_map = {d['dia']: d for d in dias}
+    egr_map = {e['dia']: e['t'] for e in egr_mes}; ing_map = {e['dia']: e['t'] for e in ing_mes}
+    t_tick=t_ven=t_ing=t_egr = 0
+    from datetime import date as dt_date
+    for day in range(1, last_day+1):
+        d = f'{month}-{day:02d}'
+        dd = datetime(year, mon, day)
+        dn = dias_nombres.get(dd.strftime('%A'), '')
+        di = dia_map.get(d, {'tickets':0,'total':0})
+        ing = ing_map.get(d,0); egr = egr_map.get(d,0); bal = ing-egr
+        is_weekend = dd.weekday() >= 5
+        fill = 'EFF6FF' if is_weekend else ('FFFFFF' if day%2==0 else 'F8FAFC')
+        cell(ws, r, 1, d[8:]+'/'+d[5:7], align='center', fill_hex=fill)
+        cell(ws, r, 2, dn, align='center', fill_hex=fill, color='6366F1' if is_weekend else DARK)
+        cell(ws, r, 3, di['tickets'], align='center', fill_hex=fill)
+        cell(ws, r, 4, di['total'], align='right', fill_hex=fill); ws.cell(r,4).number_format='$#,##0'
+        cell(ws, r, 5, ing, align='right', fill_hex=fill); ws.cell(r,5).number_format='$#,##0'
+        cell(ws, r, 6, egr, align='right', fill_hex=fill, color=RED); ws.cell(r,6).number_format='$#,##0'
+        cell(ws, r, 7, bal, align='right', fill_hex=fill, color=GREEN if bal>=0 else RED, bold=True); ws.cell(r,7).number_format='$#,##0'
+        t_tick+=di['tickets']; t_ven+=di['total']; t_ing+=ing; t_egr+=egr; r+=1
+    hdr(ws, r, ['TOTALES', '', t_tick, t_ven, t_ing, t_egr, t_ing-t_egr], fill_hex='1E293B')
+    for c in [4,5,6,7]: ws.cell(r,c).number_format='$#,##0'
+
+    # Hoja 2 — Comparación semanas
+    ws2 = wb.create_sheet('📅 Por Semana')
+    col_w(ws2, [22, 14, 18, 16])
+    title_fn(ws2, 'Comparación por semana', month_label)
+    r2 = 3; hdr(ws2, r2, ['SEMANA', 'TICKETS', 'VENTAS', 'PROMEDIO/DÍA']); r2 += 1
+    for i, s in enumerate(semanas_data):
+        fill = 'FFFFFF' if i%2==0 else 'F8FAFC'
+        cell(ws2, r2, 1, f'Semana {i+1}  ({s["label"]})', fill_hex=fill)
+        cell(ws2, r2, 2, s['tickets'], align='center', fill_hex=fill)
+        cell(ws2, r2, 3, s['total'], align='right', fill_hex=fill); ws2.cell(r2,3).number_format='$#,##0'
+        cell(ws2, r2, 4, round(s['total']/7), align='right', fill_hex=fill); ws2.cell(r2,4).number_format='$#,##0'
+        r2 += 1
+
+    # Hoja 3 — Top productos
+    ws3 = wb.create_sheet('🛒 Top Productos')
+    col_w(ws3, [34, 12, 18, 14, 12])
+    title_fn(ws3, 'Productos más vendidos', month_label)
+    r3 = 3; hdr(ws3, r3, ['PRODUCTO', 'CANTIDAD', 'TOTAL', '% PARTICIPACIÓN', 'RANKING']); r3 += 1
+    tot_p = sum(p['total'] for p in top_prods) or 1
+    for i, p in enumerate(top_prods):
+        fill = 'FFF3EE' if i==0 else 'FFFFFF' if i%2==0 else 'F8FAFC'
+        medal = ['🥇','🥈','🥉']
+        cell(ws3, r3, 1, p['product_name'], bold=(i==0), fill_hex=fill)
+        cell(ws3, r3, 2, int(p['qty']), align='center', fill_hex=fill)
+        cell(ws3, r3, 3, p['total'], align='right', fill_hex=fill); ws3.cell(r3,3).number_format='$#,##0'
+        cell(ws3, r3, 4, f'{round(p["total"]/tot_p*100,1)}%', align='center', fill_hex=fill)
+        cell(ws3, r3, 5, medal[i] if i<3 else str(i+1), align='center', fill_hex=fill); r3 += 1
+
+    # Hoja 4 — Horas pico
+    ws4 = wb.create_sheet('⏰ Horas Pico')
+    col_w(ws4, [14, 14, 18])
+    title_fn(ws4, 'Horas pico del mes', month_label)
+    r4 = 3; hdr(ws4, r4, ['HORA', 'TICKETS', 'INGRESOS']); r4 += 1
+    h_map = {p['h']: p for p in por_hora}
+    max_h = max((p['tickets'] for p in por_hora), default=0)
+    for h in range(6, 22):
+        p = h_map.get(h, {'tickets':0,'total':0})
+        fill = 'FFF3EE' if p['tickets']==max_h and max_h>0 else ('FFFFFF' if h%2==0 else 'F8FAFC')
+        bar = '█'*min(int(p['tickets']/(max_h or 1)*10),10) if p['tickets'] else ''
+        cell(ws4, r4, 1, f'{h:02d}:00', align='center', fill_hex=fill)
+        cell(ws4, r4, 2, f"{p['tickets']}  {bar}", fill_hex=fill)
+        cell(ws4, r4, 3, p['total'], align='right', fill_hex=fill); ws4.cell(r4,3).number_format='$#,##0'
+        r4 += 1
+
+    # Hoja 5 — Descuadres de caja
+    ws5 = wb.create_sheet('💰 Caja y Descuadres')
+    col_w(ws5, [22, 18, 16])
+    title_fn(ws5, 'Descuadres de caja', month_label)
+    r5 = 3; hdr(ws5, r5, ['FECHA', 'CIERRE REAL', 'DIFERENCIA']); r5 += 1
+    total_descuadre = 0
+    for i, c in enumerate(descuadres):
+        fill = 'FEF2F2'
+        cell(ws5, r5, 1, str(c['opened_at'])[:10], align='center', fill_hex=fill)
+        cell(ws5, r5, 2, c['closing_balance'] or 0, align='right', fill_hex=fill); ws5.cell(r5,2).number_format='$#,##0'
+        cell(ws5, r5, 3, c['difference'] or 0, align='right', fill_hex=fill, color=RED, bold=True); ws5.cell(r5,3).number_format='$#,##0'
+        total_descuadre += (c['difference'] or 0); r5 += 1
+    if not descuadres: cell(ws5, r5, 1, '✅ Sin descuadres este mes', color=GREEN, bold=True)
+    else:
+        r5 += 1; cell(ws5, r5, 1, 'TOTAL DESCUADRES', bold=True); cell(ws5, r5, 3, total_descuadre, color=RED, bold=True); ws5.cell(r5,3).number_format='$#,##0'
+
+    # Hoja 6 — Pérdidas
+    ws6 = wb.create_sheet('📉 Pérdidas')
+    col_w(ws6, [28, 16, 10, 16, 16, 28])
+    title_fn(ws6, 'Pérdidas del mes', month_label)
+    r6 = 3; hdr(ws6, r6, ['PRODUCTO', 'CATEGORÍA', 'CANT.', 'VALOR', 'RESPONSABLE', 'MOTIVO']); r6 += 1
+    for i, p in enumerate(perdidas):
+        fill = 'FFFFFF' if i%2==0 else 'F8FAFC'
+        cell(ws6, r6, 1, p['product_name'], fill_hex=fill); cell(ws6, r6, 2, p['category'] or '—', align='center', fill_hex=fill)
+        cell(ws6, r6, 3, p['quantity'], align='center', fill_hex=fill)
+        cell(ws6, r6, 4, p['sale_value'] or 0, align='right', fill_hex=fill, color=RED); ws6.cell(r6,4).number_format='$#,##0'
+        cell(ws6, r6, 5, p['responsible'] or '—', align='center', fill_hex=fill)
+        cell(ws6, r6, 6, p['reason'] or '—', fill_hex=fill); r6 += 1
+
+    # Hoja 7 — Trabajadores
+    ws7 = wb.create_sheet('👥 Trabajadores')
+    col_w(ws7, [20, 14, 18])
+    title_fn(ws7, 'Pérdidas por trabajador', month_label)
+    r7 = 3; hdr(ws7, r7, ['TRABAJADOR', 'N° PÉRDIDAS', 'VALOR TOTAL']); r7 += 1
+    for i, w in enumerate(workers_stats):
+        fill = 'FFFFFF' if i%2==0 else 'F8FAFC'
+        cell(ws7, r7, 1, w['responsible'], bold=True, fill_hex=fill)
+        cell(ws7, r7, 2, w['cnt'], align='center', fill_hex=fill)
+        cell(ws7, r7, 3, w['total'], align='right', fill_hex=fill, color=RED); ws7.cell(r7,3).number_format='$#,##0'; r7 += 1
+
+    # Hoja 8 — Novedades
+    ws8 = wb.create_sheet('📢 Novedades')
+    col_w(ws8, [16, 42, 16, 18])
+    title_fn(ws8, 'Novedades del mes', month_label)
+    r8 = 3; hdr(ws8, r8, ['TIPO', 'DESCRIPCIÓN', 'REPORTADO POR', 'FECHA']); r8 += 1
+    for i, n in enumerate(novedades):
+        fill = 'FFFFFF' if i%2==0 else 'F8FAFC'
+        cell(ws8, r8, 1, n['tipo'].upper(), align='center', fill_hex=fill)
+        cell(ws8, r8, 2, n['descripcion'], fill_hex=fill)
+        cell(ws8, r8, 3, n['reportado_por'], align='center', fill_hex=fill)
+        cell(ws8, r8, 4, str(n['created_at'])[:16], align='center', fill_hex=fill); r8 += 1
+    if not novedades: cell(ws8, r8, 1, 'Sin novedades', color='94A3B8')
+
+    buf = io.BytesIO(); wb.save(buf); buf.seek(0)
+    return send_file(buf, as_attachment=True, download_name=f'informe_mensual_{month}.xlsx',
+                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
 
 # ─── CIERRES DE CAJA ─────────────────────────────────
 @app.route('/api/registers', methods=['GET'])
@@ -1359,6 +2243,292 @@ def delete_worker_document(did):
             if os.path.exists(path):
                 os.remove(path)
         conn.execute('DELETE FROM worker_documents WHERE id=?', (did,))
+    return jsonify({'ok': True})
+
+# ─── CHECKLIST ───────────────────────────────────────
+@app.route('/api/checklist', methods=['GET'])
+def get_checklist():
+    turno = request.args.get('turno', 'apertura')
+    date  = request.args.get('date', datetime.now().strftime('%Y-%m-%d'))
+    with get_db() as conn:
+        items = conn.execute(
+            'SELECT * FROM checklist_items WHERE turno=? AND active=1 ORDER BY order_num',
+            (turno,)
+        ).fetchall()
+        logs = conn.execute(
+            'SELECT item_id, completed_by, created_at FROM checklist_logs WHERE date=? AND turno=?',
+            (date, turno)
+        ).fetchall()
+        done_map = {r['item_id']: {'by': r['completed_by'], 'at': r['created_at']} for r in logs}
+        result = []
+        for it in items:
+            d = dict(it)
+            d['completed'] = it['id'] in done_map
+            d['completed_by'] = done_map.get(it['id'], {}).get('by', '')
+            d['completed_at'] = done_map.get(it['id'], {}).get('at', '')
+            result.append(d)
+    return jsonify(result)
+
+@app.route('/api/checklist/toggle', methods=['POST'])
+def toggle_checklist():
+    d = request.json or {}
+    item_id      = d.get('item_id')
+    date         = d.get('date', datetime.now().strftime('%Y-%m-%d'))
+    turno        = d.get('turno', 'apertura')
+    completed    = d.get('completed', True)
+    completed_by = d.get('completed_by', '')
+    with get_db() as conn:
+        if completed:
+            conn.execute(
+                'INSERT OR REPLACE INTO checklist_logs (date, turno, item_id, completed_by) VALUES (?,?,?,?)',
+                (date, turno, item_id, completed_by)
+            )
+        else:
+            conn.execute(
+                'DELETE FROM checklist_logs WHERE date=? AND turno=? AND item_id=?',
+                (date, turno, item_id)
+            )
+    return jsonify({'ok': True})
+
+@app.route('/api/checklist/history', methods=['GET'])
+def get_checklist_history():
+    turno = request.args.get('turno', 'apertura')
+    with get_db() as conn:
+        rows = conn.execute("""
+            SELECT l.date, l.turno,
+                   COUNT(*) as completados,
+                   (SELECT COUNT(*) FROM checklist_items WHERE turno=l.turno AND active=1) as total
+            FROM checklist_logs l
+            WHERE l.turno=?
+            GROUP BY l.date, l.turno
+            ORDER BY l.date DESC
+            LIMIT 14
+        """, (turno,)).fetchall()
+    return jsonify(rows_to_list(rows))
+
+@app.route('/api/aseo', methods=['GET'])
+def get_aseo():
+    dia  = request.args.get('dia', 'lunes')
+    date = request.args.get('date', datetime.now().strftime('%Y-%m-%d'))
+    with get_db() as conn:
+        items = conn.execute(
+            'SELECT * FROM aseo_items WHERE dia=? AND active=1 ORDER BY order_num',
+            (dia,)
+        ).fetchall()
+        logs = conn.execute(
+            'SELECT item_id, completed_by, created_at FROM aseo_logs WHERE date=? AND dia=?',
+            (date, dia)
+        ).fetchall()
+        done_map = {r['item_id']: {'by': r['completed_by'], 'at': r['created_at']} for r in logs}
+        result = []
+        for it in items:
+            d = dict(it)
+            d['completed']    = it['id'] in done_map
+            d['completed_by'] = done_map.get(it['id'], {}).get('by', '')
+            d['completed_at'] = done_map.get(it['id'], {}).get('at', '')
+            result.append(d)
+    return jsonify(result)
+
+@app.route('/api/aseo/toggle', methods=['POST'])
+def toggle_aseo():
+    d            = request.json or {}
+    item_id      = d.get('item_id')
+    date         = d.get('date', datetime.now().strftime('%Y-%m-%d'))
+    dia          = d.get('dia', 'lunes')
+    completed    = d.get('completed', True)
+    completed_by = d.get('completed_by', '')
+    with get_db() as conn:
+        if completed:
+            conn.execute(
+                'INSERT OR REPLACE INTO aseo_logs (date, dia, item_id, completed_by) VALUES (?,?,?,?)',
+                (date, dia, item_id, completed_by)
+            )
+        else:
+            conn.execute(
+                'DELETE FROM aseo_logs WHERE date=? AND dia=? AND item_id=?',
+                (date, dia, item_id)
+            )
+    return jsonify({'ok': True})
+
+@app.route('/api/aseo/items', methods=['POST'])
+def add_aseo_item():
+    d    = request.json or {}
+    dia  = d.get('dia', 'lunes')
+    text = d.get('text', '').strip()
+    if not text:
+        return jsonify({'error': 'text requerido'}), 400
+    with get_db() as conn:
+        max_order = conn.execute(
+            'SELECT COALESCE(MAX(order_num),0) FROM aseo_items WHERE dia=?', (dia,)
+        ).fetchone()[0]
+        cur = conn.execute(
+            'INSERT INTO aseo_items (dia, text, order_num) VALUES (?,?,?)',
+            (dia, text, max_order + 1)
+        )
+    return jsonify({'ok': True, 'id': cur.lastrowid})
+
+@app.route('/api/aseo/items/<int:item_id>', methods=['DELETE'])
+def delete_aseo_item(item_id):
+    with get_db() as conn:
+        conn.execute('UPDATE aseo_items SET active=0 WHERE id=?', (item_id,))
+    return jsonify({'ok': True})
+
+# ─── NOVEDADES ──────────────────────────────────────────
+@app.route('/api/novedades', methods=['GET'])
+def get_novedades():
+    solo_nuevas = request.args.get('nuevas', '0') == '1'
+    with get_db() as conn:
+        if solo_nuevas:
+            rows = conn.execute(
+                'SELECT * FROM novedades WHERE visto=0 ORDER BY created_at DESC'
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                'SELECT * FROM novedades ORDER BY created_at DESC LIMIT 50'
+            ).fetchall()
+    return jsonify(rows_to_list(rows))
+
+@app.route('/api/novedades', methods=['POST'])
+def create_novedad():
+    d            = request.json or {}
+    tipo         = d.get('tipo', 'otro')
+    descripcion  = d.get('descripcion', '').strip()
+    reportado_por = d.get('reportado_por', '')
+    if not descripcion:
+        return jsonify({'error': 'descripcion requerida'}), 400
+    with get_db() as conn:
+        cur = conn.execute(
+            'INSERT INTO novedades (tipo, descripcion, reportado_por) VALUES (?,?,?)',
+            (tipo, descripcion, reportado_por)
+        )
+    return jsonify({'ok': True, 'id': cur.lastrowid})
+
+@app.route('/api/novedades/marcar-vistas', methods=['POST'])
+def marcar_novedades_vistas():
+    with get_db() as conn:
+        conn.execute('UPDATE novedades SET visto=1 WHERE visto=0')
+    return jsonify({'ok': True})
+
+@app.route('/api/novedades/<int:nid>', methods=['DELETE'])
+def delete_novedad(nid):
+    with get_db() as conn:
+        conn.execute('DELETE FROM novedades WHERE id=?', (nid,))
+    return jsonify({'ok': True})
+
+# ─── RECEPCIÓN DE INSUMOS ──────────────────────────────
+@app.route('/api/recepciones', methods=['GET'])
+def get_recepciones():
+    estado = request.args.get('estado')  # 'pendiente' | 'recibido' | None
+    with get_db() as conn:
+        if estado in ('pendiente', 'recibido'):
+            rows = conn.execute(
+                'SELECT * FROM recepciones WHERE estado=? ORDER BY '
+                'CASE WHEN estado="pendiente" THEN fecha_esperada END ASC, '
+                'recibido_at DESC, created_at DESC',
+                (estado,)
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                'SELECT * FROM recepciones ORDER BY created_at DESC LIMIT 200'
+            ).fetchall()
+    return jsonify(rows_to_list(rows))
+
+@app.route('/api/recepciones', methods=['POST'])
+def create_recepcion():
+    # Acepta multipart (con foto) o JSON
+    if request.content_type and 'multipart/form-data' in request.content_type:
+        f = request.form
+        descripcion    = (f.get('descripcion') or '').strip()
+        cantidad       = (f.get('cantidad') or '').strip()
+        proveedor      = (f.get('proveedor') or '').strip()
+        fecha_esperada = (f.get('fecha_esperada') or '').strip()
+        created_by     = (f.get('created_by') or '').strip()
+        foto_file      = request.files.get('foto')
+    else:
+        d = request.json or {}
+        descripcion    = (d.get('descripcion') or '').strip()
+        cantidad       = (d.get('cantidad') or '').strip()
+        proveedor      = (d.get('proveedor') or '').strip()
+        fecha_esperada = (d.get('fecha_esperada') or '').strip()
+        created_by     = (d.get('created_by') or '').strip()
+        foto_file      = None
+    if not descripcion:
+        return jsonify({'error': 'descripcion requerida'}), 400
+    with get_db() as conn:
+        cur = conn.execute(
+            'INSERT INTO recepciones (descripcion, cantidad, proveedor, fecha_esperada, created_by) '
+            'VALUES (?,?,?,?,?)',
+            (descripcion, cantidad, proveedor, fecha_esperada, created_by)
+        )
+        rid = cur.lastrowid
+        foto_name = ''
+        if foto_file and foto_file.filename:
+            ext = foto_file.filename.rsplit('.', 1)[-1].lower()
+            if ext in ('jpg', 'jpeg', 'png', 'gif', 'webp'):
+                upload_dir = os.path.join(os.path.dirname(__file__), 'public', 'uploads', 'recepciones')
+                os.makedirs(upload_dir, exist_ok=True)
+                foto_name = f'recepcion_{rid}.{ext}'
+                foto_file.save(os.path.join(upload_dir, foto_name))
+                conn.execute('UPDATE recepciones SET foto=? WHERE id=?', (foto_name, rid))
+        row = conn.execute('SELECT * FROM recepciones WHERE id=?', (rid,)).fetchone()
+    return jsonify(row_to_dict(row))
+
+@app.route('/api/recepciones/<int:rid>/recibir', methods=['POST'])
+def recibir_recepcion(rid):
+    d = request.json or {}
+    recibido_por = (d.get('recibido_por') or '').strip()
+    nota         = (d.get('nota') or '').strip()
+    recibido     = d.get('recibido', True)
+    with get_db() as conn:
+        if recibido:
+            conn.execute(
+                "UPDATE recepciones SET estado='recibido', recibido_por=?, nota_recepcion=?, "
+                "recibido_at=datetime('now','localtime') WHERE id=?",
+                (recibido_por, nota, rid)
+            )
+        else:
+            conn.execute(
+                "UPDATE recepciones SET estado='pendiente', recibido_por='', nota_recepcion='', "
+                "recibido_at=NULL WHERE id=?",
+                (rid,)
+            )
+        row = conn.execute('SELECT * FROM recepciones WHERE id=?', (rid,)).fetchone()
+    return jsonify(row_to_dict(row))
+
+@app.route('/api/recepciones/<int:rid>', methods=['DELETE'])
+def delete_recepcion(rid):
+    with get_db() as conn:
+        row = conn.execute('SELECT foto FROM recepciones WHERE id=?', (rid,)).fetchone()
+        if row and row['foto']:
+            fp = os.path.join(os.path.dirname(__file__), 'public', 'uploads', 'recepciones', row['foto'])
+            if os.path.exists(fp):
+                try: os.remove(fp)
+                except Exception: pass
+        conn.execute('DELETE FROM recepciones WHERE id=?', (rid,))
+    return jsonify({'ok': True})
+
+@app.route('/api/checklist/items', methods=['POST'])
+def add_checklist_item():
+    d = request.json or {}
+    turno    = d.get('turno', 'apertura')
+    section  = d.get('section', '').strip()
+    text     = d.get('text', '').strip()
+    if not text:
+        return jsonify({'error': 'text requerido'}), 400
+    with get_db() as conn:
+        max_order = conn.execute(
+            'SELECT COALESCE(MAX(order_num),0) FROM checklist_items WHERE turno=?', (turno,)
+        ).fetchone()[0]
+        cur = conn.execute(
+            'INSERT INTO checklist_items (turno, section, text, order_num) VALUES (?,?,?,?)',
+            (turno, section, text, max_order + 1)
+        )
+    return jsonify({'ok': True, 'id': cur.lastrowid})
+
+@app.route('/api/checklist/items/<int:item_id>', methods=['DELETE'])
+def delete_checklist_item(item_id):
+    with get_db() as conn:
+        conn.execute('UPDATE checklist_items SET active=0 WHERE id=?', (item_id,))
     return jsonify({'ok': True})
 
 # ─── TAREAS ──────────────────────────────────────────

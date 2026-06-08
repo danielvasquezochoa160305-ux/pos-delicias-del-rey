@@ -58,6 +58,7 @@ function selectTerminal(id, name, color, icon) {
   if (navItem) navItem.classList.add('active');
   document.getElementById(`page-${startPage}`)?.classList.add('active');
   if (startPage === 'dashboard') loadDashboard(); else loadPOS();
+  initNovedades();
 }
 
 var _pinBuffer = '';
@@ -111,6 +112,7 @@ async function pinConfirm() {
       _showPOS();
       applyRolePermissions();
       actualizarBadgeTurno();
+      initNovedades();
       document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
       document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
       document.querySelector('.nav-item[data-page="pos"]')?.classList.add('active');
@@ -247,6 +249,8 @@ document.querySelectorAll('.nav-item').forEach(item => {
     if (page === 'inventory') loadInventory();
     if (page === 'losses') loadLosses();
     if (page === 'tasks') loadTasks();
+    if (page === 'checklist') initChecklistPage();
+    if (page === 'reception') initRecepcionPage();
   });
 });
 
@@ -286,6 +290,16 @@ async function api(method, url, body) {
 //  DASHBOARD
 // ═══════════════════════════════════════════════════════
 async function loadDashboard() {
+  // Pre-llenar fechas de informes
+  const today = new Date().toISOString().slice(0,10);
+  const thisMonth = today.slice(0,7);
+  const dateEl = document.getElementById('report-daily-date');
+  const weekEl = document.getElementById('report-weekly-date');
+  const monthEl = document.getElementById('report-monthly-month');
+  if (dateEl && !dateEl.value)   dateEl.value  = today;
+  if (weekEl && !weekEl.value)   weekEl.value  = today;
+  if (monthEl && !monthEl.value) monthEl.value = thisMonth;
+
   document.getElementById('today-label').textContent = new Date().toLocaleDateString('es-MX', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
   try {
     const d = await api('GET', '/api/dashboard');
@@ -312,7 +326,175 @@ async function loadDashboard() {
         <td><span class="badge ${p.stock === 0 ? 'badge-danger' : 'badge-warning'}">${p.stock} ${p.unit}</span></td>
         <td>${p.low_stock_alert}</td>
       </tr>`).join('') : '<tr><td colspan="3" class="empty-state" style="padding:16px;color:#64748b">Sin alertas de stock</td></tr>';
+
+    // Gráfico ventas por hora
+    renderHourlyChart(d.ventasPorHora || []);
   } catch (e) { toast(e.message, 'error'); }
+}
+
+// ─── Descargar informes ───────────────────────────────
+async function downloadReport(type) {
+  let url, filename;
+  if (type === 'daily') {
+    const date = document.getElementById('report-daily-date')?.value;
+    if (!date) { toast('Selecciona una fecha', 'error'); return; }
+    url = `/api/reports/daily?date=${date}`;
+    filename = `informe_diario_${date}.xlsx`;
+  } else if (type === 'weekly') {
+    const date = document.getElementById('report-weekly-date')?.value;
+    if (!date) { toast('Selecciona una fecha de la semana', 'error'); return; }
+    url = `/api/reports/weekly?date=${date}`;
+    filename = `informe_semanal_${date}.xlsx`;
+  } else {
+    const month = document.getElementById('report-monthly-month')?.value;
+    if (!month) { toast('Selecciona un mes', 'error'); return; }
+    url = `/api/reports/monthly?month=${month}`;
+    filename = `informe_mensual_${month}.xlsx`;
+  }
+
+  toast('⏳ Generando informe...', '');
+  try {
+    const res = await fetch(url);
+    if (!res.ok) { const e = await res.json(); throw new Error(e.error || 'Error'); }
+    const blob = await res.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    toast('✅ Informe descargado', 'success');
+  } catch(e) {
+    toast(`Error: ${e.message}`, 'error');
+  }
+}
+
+// ─── Gráfico de ventas por hora ───────────────────────
+let _horaChart = null;
+
+function renderHourlyChart(data) {
+  const canvas = document.getElementById('chart-ventas-hora');
+  if (!canvas) return;
+
+  const hayDatos = data.some(h => h.ventas > 0);
+  const emptyEl  = document.getElementById('chart-hora-empty');
+
+  if (!hayDatos) {
+    if (emptyEl) emptyEl.style.display = 'flex';
+    canvas.style.display = 'none';
+    return;
+  }
+  if (emptyEl) emptyEl.style.display = 'none';
+  canvas.style.display = '';
+
+  // Solo mostrar horas entre la primera y última con ventas (+2 horas de margen)
+  const activos = data.filter(h => h.ventas > 0);
+  const horaMin = Math.max(0,  activos[0].hora - 1);
+  const horaMax = Math.min(23, activos[activos.length - 1].hora + 1);
+  const slice   = data.slice(horaMin, horaMax + 1);
+
+  const labels  = slice.map(h => `${String(h.hora).padStart(2,'0')}:00`);
+  const ventas  = slice.map(h => h.ventas);
+  const totales = slice.map(h => h.total);
+
+  // Hora pico
+  const pico = data.reduce((a, b) => b.ventas > a.ventas ? b : a, data[0]);
+  const picoBadge = document.getElementById('dash-hora-pico');
+  if (pico.ventas > 0 && picoBadge) {
+    picoBadge.textContent = `🔥 Pico: ${String(pico.hora).padStart(2,'0')}:00 (${pico.ventas} tickets)`;
+    picoBadge.style.display = '';
+  }
+
+  if (_horaChart) { _horaChart.destroy(); _horaChart = null; }
+
+  const ctx = canvas.getContext('2d');
+
+  // Gradiente para las barras de ingresos
+  const gradTotal = ctx.createLinearGradient(0, 0, 0, 220);
+  gradTotal.addColorStop(0, 'rgba(99,102,241,0.85)');
+  gradTotal.addColorStop(1, 'rgba(99,102,241,0.15)');
+
+  _horaChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Ingresos ($)',
+          data: totales,
+          backgroundColor: gradTotal,
+          borderColor: '#6366f1',
+          borderWidth: 1.5,
+          borderRadius: 6,
+          yAxisID: 'yTotal',
+          order: 2,
+        },
+        {
+          label: 'Tickets vendidos',
+          data: ventas,
+          type: 'line',
+          borderColor: '#FC4C02',
+          backgroundColor: 'rgba(252,76,2,0.12)',
+          borderWidth: 2.5,
+          pointBackgroundColor: '#FC4C02',
+          pointRadius: 4,
+          pointHoverRadius: 6,
+          tension: 0.4,
+          fill: true,
+          yAxisID: 'yVentas',
+          order: 1,
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#1e293b',
+          titleColor: '#f8fafc',
+          bodyColor: '#cbd5e1',
+          padding: 12,
+          cornerRadius: 10,
+          callbacks: {
+            label: ctx => ctx.dataset.label === 'Tickets vendidos'
+              ? ` ${ctx.raw} ticket${ctx.raw !== 1 ? 's' : ''}`
+              : ` $${Number(ctx.raw).toLocaleString('es-CO')}`
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { display: false },
+          ticks: { color: '#94a3b8', font: { size: 11 } }
+        },
+        yVentas: {
+          type: 'linear',
+          position: 'left',
+          beginAtZero: true,
+          ticks: {
+            color: '#FC4C02',
+            font: { size: 11 },
+            stepSize: 1,
+            callback: v => v % 1 === 0 ? v : ''
+          },
+          grid: { color: 'rgba(0,0,0,0.05)' }
+        },
+        yTotal: {
+          type: 'linear',
+          position: 'right',
+          beginAtZero: true,
+          ticks: {
+            color: '#6366f1',
+            font: { size: 11 },
+            callback: v => v >= 1000 ? `$${(v/1000).toFixed(0)}k` : `$${v}`
+          },
+          grid: { display: false }
+        }
+      }
+    }
+  });
 }
 
 // ═══════════════════════════════════════════════════════
@@ -3008,6 +3190,841 @@ function resetItemPrice() {
   document.getElementById('edit-price-input').value = item.originalPrice || item.price;
   document.querySelectorAll('#modal-edit-price .disc-quick-btn').forEach(b => b.classList.remove('active'));
 }
+
+// ═══════════════════════════════════════════════════════
+//  CHECKLIST DE TURNO
+// ═══════════════════════════════════════════════════════
+let _checklistTurno = 'apertura'; // turno activo del checklist
+
+function initChecklistPage() {
+  // Poner fecha de hoy
+  const today = new Date().toISOString().slice(0, 10);
+  const dateEl = document.getElementById('cl-date');
+  if (dateEl) dateEl.value = today;
+
+  // Mostrar u ocultar badge "Hoy"
+  _updateTodayBadge();
+
+  // Mostrar botón agregar solo para admin
+  const adminActions = document.getElementById('cl-admin-actions');
+  if (adminActions) adminActions.style.display = _userRole === 'admin' ? '' : 'none';
+
+  // Cargar tab apertura por defecto
+  _checklistTurno = 'apertura';
+  document.getElementById('ctab-apertura').classList.add('active');
+  document.getElementById('ctab-cierre').classList.remove('active');
+  loadChecklist();
+}
+
+function toggleAddForm(show) {
+  const form = document.getElementById('cl-add-form');
+  if (!form) return;
+  form.style.display = show ? '' : 'none';
+  if (show) {
+    // Pre-llenar la sección con la primera sección del tab activo
+    const firstSection = document.querySelector('.cl-section-header span:first-child');
+    const secEl = document.getElementById('cl-new-section');
+    if (secEl && firstSection) secEl.value = firstSection.textContent.trim();
+    document.getElementById('cl-new-text')?.focus();
+  }
+}
+
+async function saveChecklistItem() {
+  const text    = document.getElementById('cl-new-text')?.value.trim();
+  const section = document.getElementById('cl-new-section')?.value.trim() || '';
+  if (!text) { toast('Escribe la descripción', 'error'); return; }
+
+  try {
+    await api('POST', '/api/checklist/items', { turno: _checklistTurno, section, text });
+    toast('✅ Función agregada', 'success');
+    document.getElementById('cl-new-text').value = '';
+    toggleAddForm(false);
+    loadChecklist();
+  } catch(e) {
+    toast('Error al agregar', 'error');
+  }
+}
+
+async function deleteChecklistItem(itemId, e) {
+  e.stopPropagation(); // no toggle el ítem
+  if (!confirm('¿Eliminar esta función del checklist?')) return;
+  try {
+    await api('DELETE', `/api/checklist/items/${itemId}`);
+    toast('Función eliminada', 'success');
+    loadChecklist();
+  } catch(e) {
+    toast('Error al eliminar', 'error');
+  }
+}
+
+function switchChecklistTab(turno) {
+  _checklistTurno = turno;
+  document.getElementById('ctab-apertura').classList.toggle('active', turno === 'apertura');
+  document.getElementById('ctab-cierre').classList.toggle('active',   turno === 'cierre');
+  document.getElementById('ctab-aseo').classList.toggle('active',     turno === 'aseo');
+
+  // Mostrar/ocultar secciones
+  const clContent   = document.getElementById('checklist-content');
+  const aseoContent = document.getElementById('aseo-content');
+  const clAddForm   = document.getElementById('cl-add-form');
+  const adminActions = document.getElementById('cl-admin-actions');
+
+  if (turno === 'aseo') {
+    if (clContent)   clContent.style.display   = 'none';
+    if (aseoContent) aseoContent.style.display  = '';
+    if (clAddForm)   clAddForm.style.display    = 'none';
+    if (adminActions) adminActions.style.display = 'none';
+    initAseoSection();
+  } else {
+    if (clContent)   clContent.style.display   = '';
+    if (aseoContent) aseoContent.style.display  = 'none';
+    if (adminActions) adminActions.style.display = _userRole === 'admin' ? '' : 'none';
+    loadChecklist();
+  }
+}
+
+function _updateTodayBadge() {
+  const today = new Date().toISOString().slice(0, 10);
+  const dateEl = document.getElementById('cl-date');
+  const badge = document.getElementById('cl-today-badge');
+  if (!dateEl || !badge) return;
+  badge.style.display = (dateEl.value === today) ? '' : 'none';
+}
+
+async function loadChecklist() {
+  const dateEl = document.getElementById('cl-date');
+  const date = dateEl ? dateEl.value : new Date().toISOString().slice(0, 10);
+  _updateTodayBadge();
+
+  const sectionsEl = document.getElementById('cl-sections');
+  if (!sectionsEl) return;
+  sectionsEl.innerHTML = `<div class="cl-empty"><div class="cl-empty-icon">⏳</div><div class="cl-empty-msg">Cargando...</div></div>`;
+
+  try {
+    const data = await api('GET', `/api/checklist?turno=${_checklistTurno}&date=${date}`);
+    _renderChecklist(Array.isArray(data) ? data : (data.items || []));
+  } catch(e) {
+    sectionsEl.innerHTML = `<div class="cl-empty"><div class="cl-empty-icon">⚠️</div><div class="cl-empty-msg">Error cargando checklist</div></div>`;
+  }
+}
+
+function _renderChecklist(items) {
+  const sectionsEl = document.getElementById('cl-sections');
+  if (!items.length) {
+    sectionsEl.innerHTML = `<div class="cl-empty"><div class="cl-empty-icon">📋</div><div class="cl-empty-msg">Sin ítems</div><div class="cl-empty-sub">No hay ítems configurados para este turno</div></div>`;
+    _updateProgress(0, 0);
+    return;
+  }
+
+  const total = items.length;
+  const done = items.filter(i => i.completed).length;
+  _updateProgress(done, total);
+
+  // Agrupar por sección
+  const sections = {};
+  items.forEach(item => {
+    const sec = item.section || '';
+    if (!sections[sec]) sections[sec] = [];
+    sections[sec].push(item);
+  });
+
+  let html = '';
+  Object.entries(sections).forEach(([sec, secItems]) => {
+    const secDone = secItems.filter(i => i.completed).length;
+    html += `<div class="cl-section">`;
+    if (sec) {
+      html += `<div class="cl-section-header">
+        <span>${sec}</span>
+        <span class="cl-section-count">${secDone}/${secItems.length}</span>
+      </div>`;
+    }
+    secItems.forEach(item => {
+      const cls = item.completed ? 'cl-item completed' : 'cl-item';
+      const meta = item.completed && item.completed_by
+        ? `✓ ${item.completed_by}` + (item.completed_at ? ` · ${item.completed_at.slice(11,16)}` : '')
+        : '';
+      const delBtn = _userRole === 'admin'
+        ? `<button class="cl-item-del" onclick="deleteChecklistItem(${item.id}, event)" title="Eliminar">🗑</button>`
+        : '';
+      html += `<div class="${cls}" onclick="toggleChecklistItem(${item.id}, ${item.completed ? 'false' : 'true'})">
+        <div class="cl-checkbox"><span class="cl-checkbox-tick">✓</span></div>
+        <div class="cl-item-body">
+          <div class="cl-item-text">${item.text}</div>
+          ${meta ? `<div class="cl-item-meta">${meta}</div>` : ''}
+        </div>
+        ${delBtn}
+      </div>`;
+    });
+    html += `</div>`;
+  });
+
+  sectionsEl.innerHTML = html;
+}
+
+function _updateProgress(done, total) {
+  const pct = total > 0 ? Math.round(done / total * 100) : 0;
+  const fill = document.getElementById('cl-progress-fill');
+  const label = document.getElementById('cl-progress-label');
+  const pctBadge = document.getElementById('cl-progress-pct');
+
+  if (label) label.textContent = `${done} de ${total} tareas completadas`;
+  if (pctBadge) {
+    pctBadge.textContent = `${pct}%`;
+    pctBadge.classList.toggle('done', pct === 100);
+  }
+  if (fill) {
+    fill.style.width = `${pct}%`;
+    fill.classList.toggle('done', pct === 100);
+  }
+}
+
+async function toggleChecklistItem(itemId, completed) {
+  const dateEl = document.getElementById('cl-date');
+  const date = dateEl ? dateEl.value : new Date().toISOString().slice(0, 10);
+  const completedBy = _userRole === 'admin' ? 'Admin' : 'Trabajador';
+
+  try {
+    await api('POST', '/api/checklist/toggle', {
+      item_id: itemId,
+      date,
+      turno: _checklistTurno,
+      completed,
+      completed_by: completedBy
+    });
+    loadChecklist();
+  } catch(e) {
+    toast('Error al actualizar ítem', 'error');
+  }
+}
+
+
+// ═══════════════════════════════════════════════════════
+//  IMPORTAR INVENTARIO EXCEL
+// ═══════════════════════════════════════════════════════
+let _importFile = null;
+
+function openImportModal() {
+  _importFile = null;
+  document.getElementById('import-file-name').textContent = 'Ningún archivo seleccionado';
+  document.getElementById('import-file-input').value = '';
+  document.getElementById('import-submit-btn').disabled = true;
+  document.getElementById('import-drop-area').classList.remove('has-file');
+  document.getElementById('import-result').style.display = 'none';
+  openModal('modal-import');
+}
+
+function handleImportFileSelect(e) {
+  const file = e.target.files[0];
+  if (file) _setImportFile(file);
+}
+
+function handleImportDrop(e) {
+  e.preventDefault();
+  document.getElementById('import-drop-area').classList.remove('drag');
+  const file = e.dataTransfer.files[0];
+  if (file) _setImportFile(file);
+}
+
+function _setImportFile(file) {
+  _importFile = file;
+  document.getElementById('import-file-name').textContent = `📄 ${file.name}`;
+  document.getElementById('import-drop-area').classList.add('has-file');
+  document.getElementById('import-submit-btn').disabled = false;
+  document.getElementById('import-result').style.display = 'none';
+}
+
+async function submitImport() {
+  if (!_importFile) return;
+  const btn = document.getElementById('import-submit-btn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Importando...';
+
+  const formData = new FormData();
+  formData.append('file', _importFile);
+
+  try {
+    const res = await fetch('/api/products/import', { method: 'POST', body: formData });
+    const data = await res.json();
+
+    if (!res.ok) throw new Error(data.error || 'Error al importar');
+
+    // Mostrar resultado
+    const resultEl = document.getElementById('import-result');
+    let html = `
+      <div class="import-result-ok">
+        <div class="import-result-ok-title">✅ Importación completada</div>
+        <div class="import-result-stats">
+          <div class="import-stat">
+            <div class="import-stat-num">${data.total}</div>
+            <div class="import-stat-label">Total procesados</div>
+          </div>
+          <div class="import-stat">
+            <div class="import-stat-num">${data.created}</div>
+            <div class="import-stat-label">Productos nuevos</div>
+          </div>
+          <div class="import-stat orange">
+            <div class="import-stat-num">${data.updated}</div>
+            <div class="import-stat-label">Actualizados</div>
+          </div>
+        </div>`;
+    if (data.errors && data.errors.length) {
+      html += `<div class="import-errors">
+        <div class="import-errors-title">⚠️ ${data.errors.length} advertencia(s)</div>
+        ${data.errors.map(e => `<div class="import-error-item">· ${e}</div>`).join('')}
+      </div>`;
+    }
+    html += '</div>';
+    resultEl.innerHTML = html;
+    resultEl.style.display = '';
+
+    // Recargar inventario
+    loadInventory();
+    toast(`✅ ${data.created} nuevos · ${data.updated} actualizados`, 'success');
+
+  } catch(err) {
+    document.getElementById('import-result').innerHTML = `
+      <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:12px;padding:14px 16px;color:#dc2626;font-size:13px;font-weight:600">
+        ⚠️ ${err.message}
+      </div>`;
+    document.getElementById('import-result').style.display = '';
+    toast(err.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '📥 Importar';
+  }
+}
+
+
+// ═══════════════════════════════════════════════════════
+//  NOVEDADES
+// ═══════════════════════════════════════════════════════
+let _novedadesTimer = null;
+let _novTipo    = 'agotado';
+let _novPersona = '';
+
+const NOV_LABELS = {
+  agotado:      { icon: '🛒', label: 'Se agotó' },
+  dañado:       { icon: '🔧', label: 'Se dañó' },
+  recordatorio: { icon: '🔔', label: 'Recordatorio' },
+  otro:         { icon: '📋', label: 'Otro' },
+};
+
+function initNovedades() {
+  // Mostrar FAB siempre (ambos roles)
+  const fab = document.getElementById('nov-fab');
+  if (fab) fab.style.display = 'flex';
+
+  // Para admin: chequear novedades nuevas cada 30s
+  if (_userRole === 'admin') {
+    checkNuevasNovedades();
+    _novedadesTimer = setInterval(checkNuevasNovedades, 30000);
+  }
+}
+
+async function checkNuevasNovedades() {
+  try {
+    const items = await api('GET', '/api/novedades?nuevas=1');
+    const count = items.length;
+    _updateNovedadesBadges(count);
+  } catch(e) {}
+}
+
+function _updateNovedadesBadges(count) {
+  const badge    = document.getElementById('nov-fab-badge');
+  const sideBadge = document.getElementById('nov-sidebar-badge');
+  if (badge) { badge.textContent = count; badge.style.display = count > 0 ? 'flex' : 'none'; }
+  if (sideBadge) { sideBadge.textContent = count; sideBadge.style.display = count > 0 ? '' : 'none'; }
+}
+
+async function openNovedadesPanel() {
+  if (_userRole === 'admin') {
+    // Admin: abre panel lateral con listado
+    document.getElementById('nov-panel-overlay').style.display = '';
+    document.getElementById('nov-panel').style.display         = 'flex';
+    document.getElementById('nov-panel').style.flexDirection   = 'column';
+    await loadNovedadesPanel();
+  } else {
+    // Trabajador: abre modal de registro directo
+    openModalNovedad();
+  }
+}
+
+function closeNovedadesPanel() {
+  document.getElementById('nov-panel-overlay').style.display = 'none';
+  document.getElementById('nov-panel').style.display         = 'none';
+}
+
+async function loadNovedadesPanel() {
+  const listEl = document.getElementById('nov-panel-list');
+  const subEl  = document.getElementById('nov-panel-sub');
+  listEl.innerHTML = '<div class="nov-empty">Cargando...</div>';
+
+  try {
+    const items = await api('GET', '/api/novedades');
+    const nuevas = items.filter(n => !n.visto).length;
+
+    subEl.textContent = nuevas > 0
+      ? `${nuevas} novedad${nuevas > 1 ? 'es' : ''} nueva${nuevas > 1 ? 's' : ''}`
+      : 'Todo al día ✓';
+
+    if (!items.length) {
+      listEl.innerHTML = '<div class="nov-empty">Sin novedades registradas</div>';
+      return;
+    }
+
+    // Botón "Nueva novedad" arriba
+    let html = `<button class="nov-panel-new-btn" onclick="openModalNovedad()">+ Registrar nueva novedad</button>`;
+
+    items.forEach(n => {
+      const cfg = NOV_LABELS[n.tipo] || NOV_LABELS.otro;
+      const fecha = n.created_at ? n.created_at.slice(5,16).replace('T',' ') : '';
+      html += `
+      <div class="nov-item ${n.visto ? '' : 'nueva'}">
+        <div class="nov-item-header">
+          <span class="nov-tipo-chip ${n.tipo}">${cfg.icon} ${cfg.label}</span>
+          <span class="nov-item-time">${fecha}</span>
+        </div>
+        <div class="nov-item-desc">${n.descripcion}</div>
+        <div class="nov-item-footer">
+          <span class="nov-item-author">👤 ${n.reportado_por || 'Anónimo'}</span>
+          <button class="nov-item-del" onclick="deleteNovedad(${n.id})" title="Eliminar">🗑</button>
+        </div>
+      </div>`;
+    });
+    listEl.innerHTML = html;
+
+    // Marcar todas como vistas
+    await api('POST', '/api/novedades/marcar-vistas');
+    _updateNovedadesBadges(0);
+
+  } catch(e) {
+    listEl.innerHTML = '<div class="nov-empty">Error al cargar novedades</div>';
+  }
+}
+
+async function deleteNovedad(id) {
+  if (!confirm('¿Eliminar esta novedad?')) return;
+  try {
+    await api('DELETE', `/api/novedades/${id}`);
+    toast('Novedad eliminada', 'success');
+    loadNovedadesPanel();
+  } catch(e) { toast('Error al eliminar', 'error'); }
+}
+
+function openModalNovedad() {
+  // Reset tipo
+  _novTipo = 'agotado';
+  document.querySelectorAll('.nov-tipo-btn').forEach(b => b.classList.remove('active'));
+  document.querySelector('.nov-tipo-btn[data-tipo="agotado"]')?.classList.add('active');
+  document.getElementById('nov-descripcion').value = '';
+
+  // Persona: si es admin pre-seleccionar Admin, si es worker dejar sin selección
+  _novPersona = _userRole === 'admin' ? 'Admin' : '';
+  document.querySelectorAll('.nov-persona-btn').forEach(b => b.classList.remove('active'));
+  if (_userRole === 'admin') {
+    document.querySelector('.nov-persona-btn[data-nombre="Admin"]')?.classList.add('active');
+  }
+
+  openModal('modal-novedad');
+  setTimeout(() => document.getElementById('nov-descripcion')?.focus(), 150);
+}
+
+function selectNovedadTipo(btn) {
+  document.querySelectorAll('.nov-tipo-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  _novTipo = btn.dataset.tipo;
+}
+
+function selectNovedadPersona(btn) {
+  document.querySelectorAll('.nov-persona-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  _novPersona = btn.dataset.nombre;
+}
+
+async function saveNovedad() {
+  const desc = document.getElementById('nov-descripcion')?.value.trim();
+  if (!desc) { toast('Escribe la descripción', 'error'); return; }
+  if (!_novPersona) { toast('Selecciona quién reporta', 'error'); return; }
+
+  try {
+    await api('POST', '/api/novedades', {
+      tipo: _novTipo,
+      descripcion: desc,
+      reportado_por: _novPersona
+    });
+    closeModal('modal-novedad');
+    toast('✅ Novedad registrada', 'success');
+    if (document.getElementById('nov-panel').style.display !== 'none') {
+      loadNovedadesPanel();
+    }
+  } catch(e) { toast('Error al registrar', 'error'); }
+}
+
+
+// ═══════════════════════════════════════════════════════
+//  RECEPCIÓN DE INSUMOS
+// ═══════════════════════════════════════════════════════
+let _recTab = 'pendiente';
+let _recAll = [];
+let _recFotoFile = null;
+let _recibirId = null;
+let _recibirPersona = '';
+
+function initRecepcionPage() {
+  const adminActions = document.getElementById('rec-admin-actions');
+  if (adminActions) adminActions.style.display = _userRole === 'admin' ? '' : 'none';
+  switchRecepcionTab(_recTab);
+}
+
+function switchRecepcionTab(tab) {
+  _recTab = tab;
+  document.getElementById('rtab-pendiente')?.classList.toggle('active', tab === 'pendiente');
+  document.getElementById('rtab-recibido')?.classList.toggle('active', tab === 'recibido');
+  loadRecepciones();
+}
+
+async function loadRecepciones() {
+  const listEl = document.getElementById('rec-list');
+  if (!listEl) return;
+  listEl.innerHTML = '<div class="rec-empty">Cargando…</div>';
+  try {
+    _recAll = await api('GET', '/api/recepciones');
+    const pend = _recAll.filter(r => r.estado === 'pendiente');
+    const reci = _recAll.filter(r => r.estado === 'recibido');
+    document.getElementById('rec-count-pendiente').textContent = pend.length;
+    document.getElementById('rec-count-recibido').textContent  = reci.length;
+    _updateRecepcionBadge(pend.length);
+    _renderRecepciones(_recTab === 'pendiente' ? pend : reci);
+  } catch(e) {
+    listEl.innerHTML = '<div class="rec-empty">Error al cargar</div>';
+  }
+}
+
+function _updateRecepcionBadge(n) {
+  const badge = document.getElementById('nav-reception-badge');
+  if (!badge) return;
+  if (n > 0 && _userRole !== 'admin') {
+    badge.textContent = n;
+    badge.style.display = '';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+function _renderRecepciones(items) {
+  const listEl = document.getElementById('rec-list');
+  const isAdmin = _userRole === 'admin';
+  if (!items.length) {
+    listEl.innerHTML = `<div class="rec-empty">${_recTab === 'pendiente'
+      ? '🎉 No hay insumos pendientes por llegar'
+      : 'Aún no se ha recibido nada'}</div>`;
+    return;
+  }
+  listEl.innerHTML = items.map(r => {
+    const foto = r.foto
+      ? `<img class="rec-card-photo" src="/uploads/recepciones/${r.foto}" onclick="window.open('/uploads/recepciones/${r.foto}','_blank')"/>`
+      : `<div class="rec-card-photo rec-card-photo-empty">📦</div>`;
+    const meta = [];
+    if (r.cantidad)  meta.push(`<span class="rec-chip">📦 ${esc(r.cantidad)}</span>`);
+    if (r.proveedor) meta.push(`<span class="rec-chip">🚚 ${esc(r.proveedor)}</span>`);
+    if (r.fecha_esperada && r.estado === 'pendiente') {
+      meta.push(`<span class="rec-chip rec-chip-date">📅 ${_recFmtFecha(r.fecha_esperada)}</span>`);
+    }
+    let footer = '';
+    if (r.estado === 'pendiente') {
+      footer = `<button class="btn btn-primary rec-recibir-btn" onclick="openRecibirModal(${r.id})">✅ Marcar recibido</button>`;
+    } else {
+      const nota = r.nota_recepcion ? `<div class="rec-nota">📝 ${esc(r.nota_recepcion)}</div>` : '';
+      footer = `<div class="rec-recibido-info">✅ Recibido por <b>${esc(r.recibido_por || '—')}</b>
+                  <span class="rec-recibido-time">${r.recibido_at ? fmtDate(r.recibido_at) : ''}</span>${nota}</div>`;
+    }
+    const del = isAdmin
+      ? `<button class="rec-del-btn" onclick="deleteRecepcion(${r.id})" title="Eliminar">🗑</button>`
+      : '';
+    return `<div class="rec-card ${r.estado}">
+      ${foto}
+      <div class="rec-card-body">
+        <div class="rec-card-top">
+          <span class="rec-card-title">${esc(r.descripcion)}</span>
+          ${del}
+        </div>
+        ${meta.length ? `<div class="rec-card-meta">${meta.join('')}</div>` : ''}
+        <div class="rec-card-footer">${footer}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function _recFmtFecha(f) {
+  try {
+    const d = new Date(f + 'T00:00:00');
+    const hoy = new Date(); hoy.setHours(0,0,0,0);
+    const diff = Math.round((d - hoy) / 86400000);
+    const txt = d.toLocaleDateString('es-MX', { weekday:'short', day:'numeric', month:'short' });
+    if (diff === 0) return 'Hoy';
+    if (diff === 1) return 'Mañana';
+    if (diff < 0)   return txt + ' (atrasado)';
+    return txt;
+  } catch { return f; }
+}
+
+function esc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Modal registrar (admin) ──
+function openRecepcionModal() {
+  _recFotoFile = null;
+  document.getElementById('rec-descripcion').value = '';
+  document.getElementById('rec-cantidad').value = '';
+  document.getElementById('rec-proveedor').value = '';
+  document.getElementById('rec-fecha').value = new Date().toISOString().slice(0,10);
+  document.getElementById('rec-foto-input').value = '';
+  document.getElementById('rec-photo-preview').style.display = 'none';
+  document.getElementById('rec-photo-placeholder').style.display = '';
+  openModal('modal-recepcion');
+  setTimeout(() => document.getElementById('rec-descripcion')?.focus(), 150);
+}
+
+function handleRecPhotoSelect(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  _recFotoFile = file;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const img = document.getElementById('rec-photo-preview');
+    img.src = ev.target.result;
+    img.style.display = '';
+    document.getElementById('rec-photo-placeholder').style.display = 'none';
+  };
+  reader.readAsDataURL(file);
+}
+
+async function saveRecepcion() {
+  const desc = document.getElementById('rec-descripcion').value.trim();
+  if (!desc) { toast('Escribe qué va a llegar', 'error'); return; }
+  const btn = document.getElementById('rec-save-btn');
+  btn.disabled = true; btn.textContent = 'Guardando…';
+  try {
+    const fd = new FormData();
+    fd.append('descripcion', desc);
+    fd.append('cantidad', document.getElementById('rec-cantidad').value.trim());
+    fd.append('proveedor', document.getElementById('rec-proveedor').value.trim());
+    fd.append('fecha_esperada', document.getElementById('rec-fecha').value);
+    fd.append('created_by', 'Admin');
+    if (_recFotoFile) fd.append('foto', _recFotoFile);
+    const res = await fetch('/api/recepciones', { method: 'POST', body: fd });
+    if (!res.ok) throw new Error();
+    closeModal('modal-recepcion');
+    toast('✅ Insumo registrado', 'success');
+    _recTab = 'pendiente';
+    switchRecepcionTab('pendiente');
+  } catch(e) {
+    toast('Error al registrar', 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Registrar';
+  }
+}
+
+async function deleteRecepcion(id) {
+  if (!confirm('¿Eliminar este insumo?')) return;
+  try {
+    await api('DELETE', `/api/recepciones/${id}`);
+    toast('Eliminado', 'success');
+    loadRecepciones();
+  } catch(e) { toast('Error al eliminar', 'error'); }
+}
+
+// ── Modal marcar recibido (trabajador) ──
+function openRecibirModal(id) {
+  _recibirId = id;
+  const r = _recAll.find(x => x.id === id);
+  if (!r) return;
+  document.getElementById('recibir-resumen').innerHTML =
+    `<b>${esc(r.descripcion)}</b>${r.cantidad ? ' · ' + esc(r.cantidad) : ''}`;
+  document.getElementById('recibir-nota').value = '';
+  // Persona grid
+  _recibirPersona = _userRole === 'admin' ? 'Admin' : '';
+  const personas = ['Camila', 'Daniela', 'Juan', 'Admin'];
+  document.getElementById('recibir-persona-grid').innerHTML = personas.map(p =>
+    `<button class="nov-persona-btn${p === _recibirPersona ? ' active' : ''}" data-nombre="${p}" onclick="selectRecibirPersona(this)">
+       ${WORKER_AVATARS[p] || '👤'} ${p}
+     </button>`).join('');
+  openModal('modal-recibir');
+}
+
+function selectRecibirPersona(btn) {
+  document.querySelectorAll('#recibir-persona-grid .nov-persona-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  _recibirPersona = btn.dataset.nombre;
+}
+
+async function confirmarRecepcion() {
+  if (!_recibirPersona) { toast('Selecciona quién recibe', 'error'); return; }
+  try {
+    await api('POST', `/api/recepciones/${_recibirId}/recibir`, {
+      recibido_por: _recibirPersona,
+      nota: document.getElementById('recibir-nota').value.trim()
+    });
+    closeModal('modal-recibir');
+    toast('✅ Insumo recibido', 'success');
+    loadRecepciones();
+  } catch(e) { toast('Error al confirmar', 'error'); }
+}
+
+
+// ═══════════════════════════════════════════════════════
+//  ASEO SEMANAL
+// ═══════════════════════════════════════════════════════
+const DIAS_MAP = {
+  lunes:     'Lunes',
+  martes:    'Martes',
+  miercoles: 'Miércoles',
+  jueves:    'Jueves',
+  viernes:   'Viernes',
+  sabado:    'Sábado'
+};
+const DIAS_ORDER = ['lunes','martes','miercoles','jueves','viernes','sabado'];
+
+let _aseoDia = 'lunes'; // día activo
+
+function _getTodayDia() {
+  const map = ['domingo','lunes','martes','miercoles','jueves','viernes','sabado'];
+  return map[new Date().getDay()] || 'lunes';
+}
+
+function initAseoSection() {
+  const todayDia = _getTodayDia();
+
+  // Marcar botones con .today
+  DIAS_ORDER.forEach(dia => {
+    const btn = document.querySelector(`.aseo-day-btn[data-dia="${dia}"]`);
+    if (btn) btn.classList.toggle('today', dia === todayDia);
+  });
+
+  // Mostrar botón agregar solo para admin
+  const addBtn = document.getElementById('aseo-add-btn');
+  if (addBtn) addBtn.style.display = _userRole === 'admin' ? '' : 'none';
+
+  // Ir al día de hoy (o lunes si domingo)
+  const startDia = DIAS_ORDER.includes(todayDia) ? todayDia : 'lunes';
+  switchAseoDia(startDia);
+}
+
+function switchAseoDia(dia) {
+  _aseoDia = dia;
+  DIAS_ORDER.forEach(d => {
+    const btn = document.querySelector(`.aseo-day-btn[data-dia="${d}"]`);
+    if (btn) btn.classList.toggle('active', d === dia);
+  });
+  toggleAseoAddForm(false);
+  loadAseo();
+}
+
+async function loadAseo() {
+  const today = new Date().toISOString().slice(0, 10);
+  const listEl = document.getElementById('aseo-items-list');
+  if (!listEl) return;
+  listEl.innerHTML = `<div style="padding:24px;text-align:center;color:var(--text-muted)">⏳ Cargando...</div>`;
+
+  // Actualizar label del día
+  const labelEl = document.getElementById('aseo-dia-label');
+  if (labelEl) labelEl.textContent = DIAS_MAP[_aseoDia] || _aseoDia;
+
+  try {
+    const items = await api('GET', `/api/aseo?dia=${_aseoDia}&date=${today}`);
+    _renderAseoItems(items || []);
+  } catch(e) {
+    listEl.innerHTML = `<div style="padding:24px;text-align:center;color:#ef4444">⚠️ Error cargando</div>`;
+  }
+}
+
+function _renderAseoItems(items) {
+  const listEl = document.getElementById('aseo-items-list');
+  const countEl = document.getElementById('aseo-section-count');
+
+  const total = items.length;
+  const done  = items.filter(i => i.completed).length;
+
+  // Progreso
+  const pct = total > 0 ? Math.round(done / total * 100) : 0;
+  const fill  = document.getElementById('aseo-progress-fill');
+  const label = document.getElementById('aseo-progress-label');
+  const pctBadge = document.getElementById('aseo-progress-pct');
+  if (label) label.textContent = `${done} de ${total} tareas completadas`;
+  if (pctBadge) { pctBadge.textContent = `${pct}%`; pctBadge.classList.toggle('done', pct===100); }
+  if (fill) { fill.style.width = `${pct}%`; fill.classList.toggle('done', pct===100); }
+  if (countEl) countEl.textContent = `${done}/${total}`;
+
+  if (!total) {
+    listEl.innerHTML = `<div style="padding:40px;text-align:center;color:var(--text-muted)">Sin tareas para este día</div>`;
+    return;
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+  let html = '';
+  items.forEach(item => {
+    const cls = item.completed ? 'cl-item completed' : 'cl-item';
+    const meta = item.completed && item.completed_by
+      ? `✓ ${item.completed_by}` + (item.completed_at ? ` · ${item.completed_at.slice(11,16)}` : '')
+      : '';
+    const delBtn = _userRole === 'admin'
+      ? `<button class="cl-item-del" onclick="deleteAseoItem(${item.id}, event)" title="Eliminar">🗑</button>`
+      : '';
+    html += `<div class="${cls}" onclick="toggleAseoItem(${item.id}, ${item.completed ? 'false' : 'true'})">
+      <div class="cl-checkbox"><span class="cl-checkbox-tick">✓</span></div>
+      <div class="cl-item-body">
+        <div class="cl-item-text">${item.text}</div>
+        ${meta ? `<div class="cl-item-meta">${meta}</div>` : ''}
+      </div>
+      ${delBtn}
+    </div>`;
+  });
+  listEl.innerHTML = html;
+}
+
+async function toggleAseoItem(itemId, completed) {
+  const today = new Date().toISOString().slice(0, 10);
+  const completedBy = _userRole === 'admin' ? 'Admin' : 'Trabajador';
+  try {
+    await api('POST', '/api/aseo/toggle', {
+      item_id: itemId, date: today, dia: _aseoDia,
+      completed, completed_by: completedBy
+    });
+    loadAseo();
+  } catch(e) { toast('Error al actualizar', 'error'); }
+}
+
+function toggleAseoAddForm(show) {
+  const form = document.getElementById('aseo-add-form');
+  if (!form) return;
+  form.style.display = show ? '' : 'none';
+  if (show) setTimeout(() => document.getElementById('aseo-new-text')?.focus(), 50);
+}
+
+async function saveAseoItem() {
+  const text = document.getElementById('aseo-new-text')?.value.trim();
+  if (!text) { toast('Escribe la descripción', 'error'); return; }
+  try {
+    await api('POST', '/api/aseo/items', { dia: _aseoDia, text });
+    toast('✅ Tarea de aseo agregada', 'success');
+    document.getElementById('aseo-new-text').value = '';
+    toggleAseoAddForm(false);
+    loadAseo();
+  } catch(e) { toast('Error al agregar', 'error'); }
+}
+
+async function deleteAseoItem(itemId, e) {
+  e.stopPropagation();
+  if (!confirm('¿Eliminar esta tarea de aseo?')) return;
+  try {
+    await api('DELETE', `/api/aseo/items/${itemId}`);
+    toast('Tarea eliminada', 'success');
+    loadAseo();
+  } catch(e) { toast('Error al eliminar', 'error'); }
+}
+
 
 // ═══════════════════════════════════════════════════════
 //  RESET POS
