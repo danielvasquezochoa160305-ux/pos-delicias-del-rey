@@ -1365,6 +1365,7 @@ async function deleteMovement(id) {
 async function loadInventory() {
   try {
     const products = await api('GET', '/api/products');
+    allProducts = products;  // mantener el cache global sincronizado
     const tbody = document.querySelector('#inventory-table tbody');
     if (!products.length) {
       tbody.innerHTML = '<tr><td colspan="8" class="empty-state" style="padding:24px;text-align:center">Sin productos</td></tr>';
@@ -1387,15 +1388,18 @@ async function loadInventory() {
           <td>${fmt(p.price)}</td>
           <td>${p.cost > 0 ? fmt(p.cost) : '<span style="color:#94a3b8">—</span>'}</td>
           <td>${margenHtml}</td>
-          <td>${p.infinite_stock
-            ? '<span style="color:#16a34a;font-weight:700">∞ Infinito</span>'
-            : `<div class="stock-ctl">
-                 <button class="stock-btn" onclick="adjustStock(${p.id},-1)" title="Restar 1">−</button>
-                 <input class="stock-inp" id="stk-${p.id}" type="number" min="0" step="1" value="${p.stock}"
-                   onfocus="this.select()" onchange="setStockExact(${p.id}, this.value)"/>
-                 <button class="stock-btn" onclick="adjustStock(${p.id},1)" title="Sumar 1">+</button>
-                 <span class="stock-unit">${p.unit}</span>
-               </div>`}</td>
+          <td>
+            <div class="stock-ctl">
+              <button class="stock-btn" onclick="adjustStock(${p.id},-1)" title="Restar 1" ${p.infinite_stock ? 'disabled' : ''}>−</button>
+              <input class="stock-inp" id="stk-${p.id}" type="number" min="0" step="1" value="${p.infinite_stock ? '' : p.stock}"
+                placeholder="${p.infinite_stock ? '∞' : ''}" onfocus="this.select()" onchange="setStockExact(${p.id}, this.value)" ${p.infinite_stock ? 'disabled' : ''}/>
+              <button class="stock-btn" onclick="adjustStock(${p.id},1)" title="Sumar 1" ${p.infinite_stock ? 'disabled' : ''}>+</button>
+              <span class="stock-unit">${p.unit}</span>
+              <button class="stock-inf-btn ${p.infinite_stock ? 'active' : ''}" id="stkinf-${p.id}"
+                onclick="toggleInfiniteStockRow(${p.id})"
+                title="${p.infinite_stock ? 'Stock infinito activo — toca para controlar cantidad' : 'Activar stock infinito (sin control de cantidad)'}">∞</button>
+            </div>
+          </td>
           <td><span class="badge ${stockStatus}" id="stkbadge-${p.id}">${stockLabel}</span></td>
           <td>
             <button class="btn btn-outline btn-sm" onclick="editProduct(${p.id})">Editar</button>
@@ -1440,6 +1444,21 @@ function _saveStock(id, value) {
       loadInventory();
     }
   }, 350);
+}
+
+async function toggleInfiniteStockRow(id) {
+  // Estado actual desde el botón (robusto aunque el cache no esté cargado)
+  const btn = document.getElementById('stkinf-' + id);
+  const esInfinitoAhora = btn ? btn.classList.contains('active')
+    : !!(allProducts.find(p => p.id === id) || {}).infinite_stock;
+  const nuevoInfinito = !esInfinitoAhora;
+  try {
+    const updated = await api('POST', `/api/products/${id}/stock`, { infinite_stock: nuevoInfinito });
+    const idx = allProducts.findIndex(p => p.id === id);
+    if (idx >= 0) allProducts[idx] = updated;
+    loadInventory();  // re-renderiza la fila con/ sin controles
+    toast(nuevoInfinito ? 'Stock infinito activado' : 'Control de cantidad activado', 'success');
+  } catch (e) { toast('Error al cambiar el modo de stock', 'error'); }
 }
 
 function _updateStockBadge(p) {

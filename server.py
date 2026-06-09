@@ -734,21 +734,28 @@ def update_product(pid):
 
 @app.route('/api/products/<int:pid>/stock', methods=['POST'])
 def adjust_stock(pid):
-    """Ajusta el stock: {stock: N} fija el valor exacto, {delta: ±N} suma/resta."""
+    """Ajusta el stock: {stock: N} fija el valor exacto, {delta: ±N} suma/resta,
+    {infinite_stock: true/false} activa o desactiva el control de cantidad."""
     d = request.json or {}
     with get_db() as conn:
         row = conn.execute('SELECT * FROM products WHERE id=?', (pid,)).fetchone()
         if not row:
             return jsonify({'error': 'Producto no encontrado'}), 404
+        # Activar/desactivar stock infinito
+        if 'infinite_stock' in d:
+            inf = 1 if d['infinite_stock'] else 0
+            conn.execute('UPDATE products SET infinite_stock=? WHERE id=?', (inf, pid))
+        # Ajuste de cantidad
         if 'stock' in d:
             try: new_stock = max(0, float(d['stock']))
             except (TypeError, ValueError): return jsonify({'error': 'Cantidad inválida'}), 400
+            conn.execute('UPDATE products SET stock=? WHERE id=?', (new_stock, pid))
         elif 'delta' in d:
             try: new_stock = max(0, float(row['stock']) + float(d['delta']))
             except (TypeError, ValueError): return jsonify({'error': 'Cantidad inválida'}), 400
-        else:
-            return jsonify({'error': 'Falta stock o delta'}), 400
-        conn.execute('UPDATE products SET stock=? WHERE id=?', (new_stock, pid))
+            conn.execute('UPDATE products SET stock=? WHERE id=?', (new_stock, pid))
+        elif 'infinite_stock' not in d:
+            return jsonify({'error': 'Falta stock, delta o infinite_stock'}), 400
         prod = conn.execute('SELECT * FROM products WHERE id=?', (pid,)).fetchone()
     return jsonify(row_to_dict(prod))
 
