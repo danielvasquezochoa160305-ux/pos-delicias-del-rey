@@ -1256,3 +1256,20 @@ textarea.input { resize: vertical; }
 .recibir-resumen { background: var(--border-light); border-radius: var(--radius-sm); padding: 12px 14px; margin-bottom: 16px; font-size: 14px; color: var(--text); }
 .rec-photo-drop { border: 2px dashed var(--border); border-radius: var(--radius-sm); padding: 22px; text-align: center; cursor: pointer; transition: border-color .15s, background .15s; }
 .rec-photo-drop:hover { border-color: var(--primary); background: #fff8f5; }
+
+/* ═══════════════ CUENTAS ABIERTAS ═══════════════ */
+.cart-accounts-bar { display: flex; gap: 6px; flex-wrap: wrap; padding: 8px 8px 0; align-items: center; }
+.acct-chip { display: inline-flex; align-items: center; gap: 6px; background: #f1f5f9; border: 1.5px solid transparent; color: var(--text-muted); border-radius: 999px; padding: 5px 11px; font-size: 12.5px; font-weight: 700; cursor: pointer; white-space: nowrap; transition: all .15s; }
+.acct-chip:hover { background: #e8edf3; }
+.acct-chip.active { background: var(--primary); color: #fff; border-color: var(--primary); box-shadow: 0 2px 8px rgba(252,76,2,.3); }
+.acct-chip-count { background: rgba(0,0,0,.12); color: inherit; border-radius: 999px; padding: 0 6px; font-size: 11px; font-weight: 800; min-width: 18px; text-align: center; }
+.acct-chip.active .acct-chip-count { background: rgba(255,255,255,.3); }
+.acct-chip-x { font-size: 15px; line-height: 1; opacity: .55; margin-left: 1px; border-radius: 50%; width: 16px; height: 16px; display: inline-flex; align-items: center; justify-content: center; }
+.acct-chip-x:hover { opacity: 1; background: rgba(0,0,0,.15); }
+.acct-chip.active .acct-chip-x:hover { background: rgba(255,255,255,.35); }
+.acct-chip-new { background: #fff; border: 1.5px dashed var(--border); color: var(--primary); }
+.acct-chip-new:hover { background: #fff8f5; border-color: var(--primary); }
+
+.cuenta-quick-names { display: flex; flex-wrap: wrap; gap: 6px; }
+.cuenta-quick-btn { background: #f1f5f9; border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; font-size: 13px; font-weight: 600; color: var(--text-muted); cursor: pointer; transition: all .15s; }
+.cuenta-quick-btn:hover { background: var(--primary); color: #fff; border-color: var(--primary); }

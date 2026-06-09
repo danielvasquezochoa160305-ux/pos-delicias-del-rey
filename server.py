@@ -280,6 +280,16 @@ def init_db():
             FOREIGN KEY (worker_id) REFERENCES workers(id)
         )""")
 
+        # Tabla de cuentas abiertas (varias órdenes en paralelo)
+        conn.execute("""
+        CREATE TABLE IF NOT EXISTS open_accounts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL DEFAULT 'Cuenta',
+            items TEXT NOT NULL DEFAULT '[]',
+            created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+        )""")
+
         # Tabla de recepción de insumos
         conn.execute("""
         CREATE TABLE IF NOT EXISTS recepciones (
@@ -2427,6 +2437,59 @@ def marcar_novedades_vistas():
 def delete_novedad(nid):
     with get_db() as conn:
         conn.execute('DELETE FROM novedades WHERE id=?', (nid,))
+    return jsonify({'ok': True})
+
+# ─── CUENTAS ABIERTAS ──────────────────────────────────
+@app.route('/api/open-accounts', methods=['GET'])
+def get_open_accounts():
+    with get_db() as conn:
+        rows = conn.execute(
+            'SELECT * FROM open_accounts ORDER BY created_at ASC'
+        ).fetchall()
+    result = []
+    for r in rows:
+        d = dict(r)
+        try:
+            d['items'] = json.loads(d.get('items') or '[]')
+        except Exception:
+            d['items'] = []
+        result.append(d)
+    return jsonify(result)
+
+@app.route('/api/open-accounts', methods=['POST'])
+def create_open_account():
+    d = request.json or {}
+    name = (d.get('name') or 'Cuenta').strip() or 'Cuenta'
+    items = d.get('items', [])
+    with get_db() as conn:
+        cur = conn.execute(
+            'INSERT INTO open_accounts (name, items) VALUES (?,?)',
+            (name, json.dumps(items))
+        )
+        row = conn.execute('SELECT * FROM open_accounts WHERE id=?', (cur.lastrowid,)).fetchone()
+    res = dict(row)
+    res['items'] = items
+    return jsonify(res)
+
+@app.route('/api/open-accounts/<int:aid>', methods=['PUT'])
+def update_open_account(aid):
+    d = request.json or {}
+    with get_db() as conn:
+        row = conn.execute('SELECT * FROM open_accounts WHERE id=?', (aid,)).fetchone()
+        if not row:
+            return jsonify({'error': 'Cuenta no encontrada'}), 404
+        name  = (d.get('name') if d.get('name') is not None else row['name'])
+        items = d.get('items') if d.get('items') is not None else json.loads(row['items'] or '[]')
+        conn.execute(
+            "UPDATE open_accounts SET name=?, items=?, updated_at=datetime('now','localtime') WHERE id=?",
+            (name, json.dumps(items), aid)
+        )
+    return jsonify({'ok': True})
+
+@app.route('/api/open-accounts/<int:aid>', methods=['DELETE'])
+def delete_open_account(aid):
+    with get_db() as conn:
+        conn.execute('DELETE FROM open_accounts WHERE id=?', (aid,))
     return jsonify({'ok': True})
 
 # ─── RECEPCIÓN DE INSUMOS ──────────────────────────────

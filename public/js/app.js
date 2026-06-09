@@ -541,6 +541,8 @@ async function loadPOS() {
     renderCategories();
     renderProducts();
   } catch (e) { toast(e.message, 'error'); }
+
+  loadOpenAccounts();
 }
 
 function setPOSLock(locked) {
@@ -630,6 +632,7 @@ function addToCart(productId) {
     cart.push({ product_id: product.id, product_name: product.name, price: product.price, originalPrice: product.price, quantity: 1 });
   }
   renderCart();
+  scheduleAccountSave();
 }
 
 function changeQty(productId, delta) {
@@ -638,11 +641,13 @@ function changeQty(productId, delta) {
   item.quantity += delta;
   if (item.quantity <= 0) cart = cart.filter(i => i.product_id !== productId);
   renderCart();
+  scheduleAccountSave();
 }
 
 function removeFromCart(productId) {
   cart = cart.filter(i => i.product_id !== productId);
   renderCart();
+  scheduleAccountSave();
 }
 
 function clearCart() {
@@ -660,6 +665,121 @@ function clearCart() {
   const clienteInput = document.querySelector('#tab-cliente input');
   if (clienteInput) clienteInput.value = '';
   renderCart();
+}
+
+// ═══════════════════════════════════════════════════════
+//  CUENTAS ABIERTAS (varias órdenes en paralelo)
+// ═══════════════════════════════════════════════════════
+let _openAccounts = [];
+let _activeAccountId = null;   // null = venta rápida
+let _quickCart = [];           // carrito de "venta rápida" guardado al cambiar de cuenta
+let _acctSaveTimer = null;
+
+async function loadOpenAccounts() {
+  try { _openAccounts = await api('GET', '/api/open-accounts'); }
+  catch { _openAccounts = []; }
+  if (_activeAccountId && !_openAccounts.find(a => a.id === _activeAccountId)) {
+    _activeAccountId = null;
+    cart = _quickCart;
+    renderCart();
+  }
+  renderAccountsBar();
+}
+
+function renderAccountsBar() {
+  const bar = document.getElementById('cart-accounts-bar');
+  if (!bar) return;
+  const chips = [];
+  chips.push(`<button class="acct-chip ${_activeAccountId===null?'active':''}" onclick="switchAccount(null)">⚡ Venta rápida</button>`);
+  _openAccounts.forEach(a => {
+    const count = (a.items||[]).reduce((s,i)=>s+(Number(i.quantity)||0),0);
+    chips.push(`<button class="acct-chip ${_activeAccountId===a.id?'active':''}" onclick="switchAccount(${a.id})">
+        <span>🧾 ${esc(a.name)}</span>
+        ${count?`<span class="acct-chip-count">${count}</span>`:''}
+        <span class="acct-chip-x" onclick="event.stopPropagation();discardAccount(${a.id})" title="Descartar cuenta">×</span>
+      </button>`);
+  });
+  chips.push(`<button class="acct-chip acct-chip-new" onclick="openNuevaCuenta()">+ Cuenta</button>`);
+  bar.innerHTML = chips.join('');
+}
+
+function _cartSnapshot() { return cart.map(i => ({...i})); }
+
+async function _persistActive() {
+  if (_activeAccountId == null) return;
+  try { await api('PUT', `/api/open-accounts/${_activeAccountId}`, { items: _cartSnapshot() }); } catch {}
+}
+
+function scheduleAccountSave() {
+  if (_activeAccountId == null) { _quickCart = cart; return; }
+  const acc = _openAccounts.find(a=>a.id===_activeAccountId);
+  if (acc) acc.items = _cartSnapshot();
+  renderAccountsBar();
+  clearTimeout(_acctSaveTimer);
+  _acctSaveTimer = setTimeout(_persistActive, 500);
+}
+
+async function switchAccount(id) {
+  if (id === _activeAccountId) return;
+  if (_activeAccountId == null) { _quickCart = cart; }
+  else { await _persistActive(); }
+  _activeAccountId = id;
+  if (id == null) {
+    cart = _quickCart;
+  } else {
+    const acc = _openAccounts.find(a=>a.id===id);
+    cart = acc ? (acc.items||[]).map(i=>({...i})) : [];
+  }
+  renderAccountsBar();
+  renderCart();
+}
+
+function openNuevaCuenta() {
+  document.getElementById('cuenta-nombre').value = '';
+  const quick = ['Mesa 1','Mesa 2','Mesa 3','Para llevar','Domicilio'];
+  document.getElementById('cuenta-quick-names').innerHTML = quick.map(n =>
+    `<button class="cuenta-quick-btn" onclick="document.getElementById('cuenta-nombre').value='${n}'">${n}</button>`).join('');
+  openModal('modal-cuenta');
+  setTimeout(()=>document.getElementById('cuenta-nombre')?.focus(),150);
+}
+
+async function confirmNuevaCuenta() {
+  let name = document.getElementById('cuenta-nombre').value.trim();
+  if (!name) name = `Cuenta ${_openAccounts.length+1}`;
+  // Si estamos en venta rápida con productos, se "parquean" en la nueva cuenta
+  const parkItems = (_activeAccountId==null && cart.length) ? _cartSnapshot() : [];
+  try {
+    const acc = await api('POST', '/api/open-accounts', { name, items: parkItems });
+    acc.items = parkItems;
+    _openAccounts.push(acc);
+    if (parkItems.length) _quickCart = [];
+    _activeAccountId = acc.id;
+    cart = parkItems.map(i=>({...i}));
+    closeModal('modal-cuenta');
+    renderAccountsBar();
+    renderCart();
+    toast(`Cuenta "${acc.name}" abierta`, 'success');
+  } catch(e) { toast('Error al crear la cuenta','error'); }
+}
+
+async function discardAccount(id) {
+  const acc = _openAccounts.find(a=>a.id===id);
+  if (!confirm(`¿Descartar la cuenta "${acc?acc.name:''}"? Se perderán sus productos.`)) return;
+  try { await api('DELETE', `/api/open-accounts/${id}`); } catch {}
+  _openAccounts = _openAccounts.filter(a=>a.id!==id);
+  if (_activeAccountId === id) { _activeAccountId = null; cart = _quickCart; renderCart(); }
+  renderAccountsBar();
+}
+
+// Tras cobrar exitosamente una cuenta, eliminarla
+async function _closeAccountAfterSale() {
+  if (_activeAccountId == null) return;
+  const id = _activeAccountId;
+  _openAccounts = _openAccounts.filter(a=>a.id!==id);
+  _activeAccountId = null;
+  _quickCart = [];
+  renderAccountsBar();
+  try { await api('DELETE', `/api/open-accounts/${id}`); } catch {}
 }
 
 // Tabs del carrito
@@ -839,6 +959,7 @@ async function confirmCobro() {
     currentSaleForPrint = sale;
     closeModal('modal-cobro');
     toast(`Venta #${sale.id} registrada ✓`, 'success');
+    _closeAccountAfterSale();
     clearCart();
     allProducts = await api('GET', '/api/products');
     renderProducts();
@@ -3172,6 +3293,7 @@ function applyEditPrice() {
   item.price = newPrice;
   closeModal('modal-edit-price');
   renderCart();
+  scheduleAccountSave();
   toast('Precio modificado', 'success');
 }
 
