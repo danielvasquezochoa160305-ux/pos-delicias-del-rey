@@ -732,6 +732,26 @@ def update_product(pid):
         row = conn.execute('SELECT * FROM products WHERE id=?', (pid,)).fetchone()
     return jsonify(row_to_dict(row))
 
+@app.route('/api/products/<int:pid>/stock', methods=['POST'])
+def adjust_stock(pid):
+    """Ajusta el stock: {stock: N} fija el valor exacto, {delta: ±N} suma/resta."""
+    d = request.json or {}
+    with get_db() as conn:
+        row = conn.execute('SELECT * FROM products WHERE id=?', (pid,)).fetchone()
+        if not row:
+            return jsonify({'error': 'Producto no encontrado'}), 404
+        if 'stock' in d:
+            try: new_stock = max(0, float(d['stock']))
+            except (TypeError, ValueError): return jsonify({'error': 'Cantidad inválida'}), 400
+        elif 'delta' in d:
+            try: new_stock = max(0, float(row['stock']) + float(d['delta']))
+            except (TypeError, ValueError): return jsonify({'error': 'Cantidad inválida'}), 400
+        else:
+            return jsonify({'error': 'Falta stock o delta'}), 400
+        conn.execute('UPDATE products SET stock=? WHERE id=?', (new_stock, pid))
+        prod = conn.execute('SELECT * FROM products WHERE id=?', (pid,)).fetchone()
+    return jsonify(row_to_dict(prod))
+
 @app.route('/api/products/<int:pid>', methods=['DELETE'])
 def delete_product(pid):
     with get_db() as conn:

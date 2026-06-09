@@ -1387,8 +1387,16 @@ async function loadInventory() {
           <td>${fmt(p.price)}</td>
           <td>${p.cost > 0 ? fmt(p.cost) : '<span style="color:#94a3b8">—</span>'}</td>
           <td>${margenHtml}</td>
-          <td>${p.stock} ${p.unit}</td>
-          <td><span class="badge ${stockStatus}">${stockLabel}</span></td>
+          <td>${p.infinite_stock
+            ? '<span style="color:#16a34a;font-weight:700">∞ Infinito</span>'
+            : `<div class="stock-ctl">
+                 <button class="stock-btn" onclick="adjustStock(${p.id},-1)" title="Restar 1">−</button>
+                 <input class="stock-inp" id="stk-${p.id}" type="number" min="0" step="1" value="${p.stock}"
+                   onfocus="this.select()" onchange="setStockExact(${p.id}, this.value)"/>
+                 <button class="stock-btn" onclick="adjustStock(${p.id},1)" title="Sumar 1">+</button>
+                 <span class="stock-unit">${p.unit}</span>
+               </div>`}</td>
+          <td><span class="badge ${stockStatus}" id="stkbadge-${p.id}">${stockLabel}</span></td>
           <td>
             <button class="btn btn-outline btn-sm" onclick="editProduct(${p.id})">Editar</button>
             <button class="btn-icon" onclick="deleteProduct(${p.id})" title="Eliminar">🗑️</button>
@@ -1397,6 +1405,50 @@ async function loadInventory() {
       `;
     }).join('');
   } catch (e) { toast(e.message, 'error'); }
+}
+
+// ── Ajuste rápido de stock desde el inventario ──
+function adjustStock(id, delta) {
+  const inp = document.getElementById('stk-' + id);
+  if (!inp) return;
+  const nuevo = Math.max(0, (parseFloat(inp.value) || 0) + delta);
+  inp.value = nuevo;
+  _saveStock(id, nuevo);
+}
+
+function setStockExact(id, value) {
+  const nuevo = Math.max(0, parseFloat(value) || 0);
+  const inp = document.getElementById('stk-' + id);
+  if (inp) inp.value = nuevo;
+  _saveStock(id, nuevo);
+}
+
+let _stockSaveTimers = {};
+function _saveStock(id, value) {
+  // Guarda con un pequeño retraso para agrupar clics rápidos en +/−
+  clearTimeout(_stockSaveTimers[id]);
+  _stockSaveTimers[id] = setTimeout(async () => {
+    try {
+      const prod = await api('POST', `/api/products/${id}/stock`, { stock: value });
+      const idx = allProducts.findIndex(p => p.id === id);
+      if (idx >= 0) allProducts[idx] = prod;
+      _updateStockBadge(prod);
+      const inp = document.getElementById('stk-' + id);
+      if (inp) { inp.classList.add('stock-saved'); setTimeout(() => inp.classList.remove('stock-saved'), 700); }
+    } catch (e) {
+      toast('Error al actualizar la cantidad', 'error');
+      loadInventory();
+    }
+  }, 350);
+}
+
+function _updateStockBadge(p) {
+  const badge = document.getElementById('stkbadge-' + p.id);
+  if (!badge) return;
+  const cls = p.infinite_stock ? 'badge-success' : p.stock === 0 ? 'badge-danger' : p.stock <= p.low_stock_alert ? 'badge-warning' : 'badge-success';
+  const lbl = p.infinite_stock ? '∞ Infinito' : p.stock === 0 ? 'Sin stock' : p.stock <= p.low_stock_alert ? 'Stock bajo' : 'OK';
+  badge.className = 'badge ' + cls;
+  badge.textContent = lbl;
 }
 
 function toggleInfiniteStock(checkbox) {
