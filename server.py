@@ -2660,8 +2660,9 @@ def reset_pos():
     pin_admin  = cfg.get('pin_admin',  '1623')
     pin_worker = cfg.get('pin_worker', '0000')
 
-    if pin == pin_admin:
-        # Borrar TODO
+    if pin == pin_admin or pin == pin_worker:
+        # Borrar solo TRANSACCIONES — CONSERVA inventario, configuración,
+        # trabajadores, checklist, aseo, novedades y recepciones.
         with get_db() as conn:
             conn.executescript("""
                 PRAGMA foreign_keys=OFF;
@@ -2674,56 +2675,13 @@ def reset_pos():
                 DELETE FROM returns;
                 DELETE FROM journal_entries;
                 DELETE FROM losses;
-                DELETE FROM products;
                 DELETE FROM open_accounts;
                 UPDATE SQLITE_SEQUENCE SET seq=0 WHERE name IN
                     ('sales','sale_items','cash_movements','cash_registers',
                      'comandas','returns','return_items','journal_entries',
-                     'losses','products','open_accounts');
+                     'losses','open_accounts');
             """)
-            # Reinsertar productos de muestra
-            samples = [
-                ('Café americano','Bebidas',25,100,'taza',10),
-                ('Café con leche','Bebidas',30,100,'taza',10),
-                ('Capuchino','Bebidas',35,100,'taza',10),
-                ('Té negro','Bebidas',20,50,'taza',10),
-                ('Agua natural 500ml','Bebidas',15,24,'botella',6),
-                ('Croissant','Panadería',28,20,'pieza',5),
-                ('Muffin','Panadería',25,15,'pieza',5),
-                ('Sándwich jamón','Comida',55,10,'pieza',3),
-                ('Ensalada de frutas','Comida',45,8,'porción',3),
-                ('Jugo naranja','Bebidas',35,10,'vaso',5),
-            ]
-            conn.executemany(
-                'INSERT INTO products (name,category,price,stock,unit,low_stock_alert) VALUES (?,?,?,?,?,?)',
-                samples
-            )
-        return jsonify({'ok': True, 'type': 'full'})
-
-    elif pin == pin_worker:
-        # Borrar solo inventario
-        with get_db() as conn:
-            conn.executescript("""
-                DELETE FROM products;
-                UPDATE SQLITE_SEQUENCE SET seq=0 WHERE name='products';
-            """)
-            samples = [
-                ('Café americano','Bebidas',25,100,'taza',10),
-                ('Café con leche','Bebidas',30,100,'taza',10),
-                ('Capuchino','Bebidas',35,100,'taza',10),
-                ('Té negro','Bebidas',20,50,'taza',10),
-                ('Agua natural 500ml','Bebidas',15,24,'botella',6),
-                ('Croissant','Panadería',28,20,'pieza',5),
-                ('Muffin','Panadería',25,15,'pieza',5),
-                ('Sándwich jamón','Comida',55,10,'pieza',3),
-                ('Ensalada de frutas','Comida',45,8,'porción',3),
-                ('Jugo naranja','Bebidas',35,10,'vaso',5),
-            ]
-            conn.executemany(
-                'INSERT INTO products (name,category,price,stock,unit,low_stock_alert) VALUES (?,?,?,?,?,?)',
-                samples
-            )
-        return jsonify({'ok': True, 'type': 'inventory'})
+        return jsonify({'ok': True, 'type': 'transacciones'})
 
     else:
         return jsonify({'error': 'PIN incorrecto'}), 401

@@ -4172,13 +4172,9 @@ async function confirmReset() {
   const pin = document.getElementById('reset-pin').value.trim();
   if (!pin) { toast('Ingresa tu clave', 'error'); return; }
   try {
-    const res = await api('POST', '/api/reset', { pin });
+    await api('POST', '/api/reset', { pin });
     closeModal('modal-reset');
-    if (res.type === 'full') {
-      toast('✅ POS reiniciado completamente', 'success');
-    } else {
-      toast('✅ Inventario reiniciado', 'success');
-    }
+    toast('✅ Transacciones reiniciadas (inventario conservado)', 'success');
     setTimeout(() => location.reload(), 1200);
   } catch(err) {
     toast(err.message || 'PIN incorrecto', 'error');
