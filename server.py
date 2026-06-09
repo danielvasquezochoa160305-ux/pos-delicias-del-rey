@@ -2664,6 +2664,7 @@ def reset_pos():
         # Borrar TODO
         with get_db() as conn:
             conn.executescript("""
+                PRAGMA foreign_keys=OFF;
                 DELETE FROM sale_items;
                 DELETE FROM sales;
                 DELETE FROM cash_movements;
@@ -2674,10 +2675,11 @@ def reset_pos():
                 DELETE FROM journal_entries;
                 DELETE FROM losses;
                 DELETE FROM products;
+                DELETE FROM open_accounts;
                 UPDATE SQLITE_SEQUENCE SET seq=0 WHERE name IN
                     ('sales','sale_items','cash_movements','cash_registers',
                      'comandas','returns','return_items','journal_entries',
-                     'losses','products');
+                     'losses','products','open_accounts');
             """)
             # Reinsertar productos de muestra
             samples = [
