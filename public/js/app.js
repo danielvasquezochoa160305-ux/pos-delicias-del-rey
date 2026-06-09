@@ -1567,11 +1567,14 @@ function _fmtElapsed(ms) {
 
 function _startTurnoCounter(openedAt) {
   if (_turnoCounterInterval) clearInterval(_turnoCounterInterval);
-  const start = new Date(openedAt);
+  // Reemplazar espacio por 'T' para que TODOS los navegadores (incl. Safari)
+  // lo interpreten como hora local de forma consistente.
+  const start = new Date(String(openedAt).replace(' ', 'T'));
   const tick = () => {
     const el = document.getElementById('turno-elapsed');
     if (!el) { clearInterval(_turnoCounterInterval); return; }
-    el.textContent = _fmtElapsed(Date.now() - start.getTime());
+    const ms = Date.now() - start.getTime();
+    el.textContent = _fmtElapsed(isNaN(ms) || ms < 0 ? 0 : ms);
   };
   tick();
   _turnoCounterInterval = setInterval(tick, 1000);
@@ -1744,9 +1747,12 @@ async function confirmarCierre() {
     renderRegisterBanner(null);
     toast('Caja cerrada — Punto de venta bloqueado', 'success');
     setPOSLock(true);
-    showCierreReport(result);
+    // El reporte no debe romper el cierre: si falla, lo ignoramos.
+    try { await showCierreReport(result); } catch (e) { console.error('Reporte de cierre:', e); }
   } catch (e) {
     toast(e.message, 'error');
+  } finally {
+    // Siempre reiniciar el botón, pase lo que pase.
     btn.disabled = false;
     btn.textContent = 'Cerrar caja';
   }
@@ -1758,10 +1764,10 @@ async function showCierreReport(reg) {
     '<div style="text-align:center;padding:48px 0;color:#94a3b8;font-size:14px">⏳ Cargando reporte...</div>';
 
   // ── Datos básicos ────────────────────────────────────
-  const opened   = new Date(reg.opened_at).toLocaleString('es-MX', { dateStyle:'short', timeStyle:'short' });
-  const closed   = reg.closed_at ? new Date(reg.closed_at).toLocaleString('es-MX', { dateStyle:'short', timeStyle:'short' }) : '—';
-  const openedDate = new Date(reg.opened_at);
-  const closedDate = reg.closed_at ? new Date(reg.closed_at) : new Date();
+  const openedDate = reg.opened_at ? new Date(String(reg.opened_at).replace(' ', 'T')) : new Date();
+  const closedDate = reg.closed_at ? new Date(String(reg.closed_at).replace(' ', 'T')) : new Date();
+  const opened   = openedDate.toLocaleString('es-MX', { dateStyle:'short', timeStyle:'short' });
+  const closed   = reg.closed_at ? closedDate.toLocaleString('es-MX', { dateStyle:'short', timeStyle:'short' }) : '—';
   const dayStr   = openedDate.toISOString().slice(0,10);
   const monthFrom = dayStr.slice(0,7) + '-01';
   const monthTo   = dayStr.slice(0,7) + '-31';

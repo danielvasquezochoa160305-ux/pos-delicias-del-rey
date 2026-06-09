@@ -15,6 +15,9 @@ apt-get upgrade -y
 echo "==> 2/8  Instalando dependencias (python, nginx, git, sqlite, firewall)..."
 apt-get install -y python3 python3-venv python3-pip nginx git sqlite3 ufw
 
+echo "==> Configurando zona horaria (America/Bogota)..."
+timedatectl set-timezone America/Bogota 2>/dev/null || true
+
 if [ ! -d "$APP_DIR" ]; then
   echo "ERROR: no existe $APP_DIR."
   echo "Primero sube el código ahí. Ejemplo:"
