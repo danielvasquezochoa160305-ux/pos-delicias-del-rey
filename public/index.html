@@ -1121,27 +1121,6 @@
 <!-- ═══ MODAL NUEVO TRABAJADOR ═══ -->
 <!-- modal-worker-create removed (workers are fixed: Camila, Daniela, Juan) -->
 
-<!-- ═══ MODAL NUEVA CUENTA ═══ -->
-<div class="modal-overlay" id="modal-cuenta" onclick="closeModal('modal-cuenta')">
-  <div class="modal" onclick="event.stopPropagation()" style="max-width:380px">
-    <div class="modal-header">
-      <h3>🧾 Nueva cuenta</h3>
-      <button class="modal-close" onclick="closeModal('modal-cuenta')">&times;</button>
-    </div>
-    <div class="modal-body">
-      <div class="form-group" style="margin-bottom:10px">
-        <label>Nombre de la cuenta</label>
-        <input type="text" id="cuenta-nombre" class="input" placeholder="Ej: Mesa 1, Juan, Para llevar…" onkeydown="if(event.key==='Enter') confirmNuevaCuenta()"/>
-      </div>
-      <div class="cuenta-quick-names" id="cuenta-quick-names"></div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn" onclick="closeModal('modal-cuenta')">Cancelar</button>
-      <button class="btn btn-primary" onclick="confirmNuevaCuenta()">Crear cuenta</button>
-    </div>
-  </div>
-</div>
-
 <!-- ═══ MODAL CONFIGURACIÓN ═══ -->
 <div class="modal-overlay" id="modal-settings" onclick="closeModal('modal-settings')">
   <div class="modal" onclick="event.stopPropagation()" style="max-width:480px">
@@ -1820,6 +1799,6 @@
 
 <div class="toast" id="toast"></div>
 
-<script src="/js/app.js?v=61"></script>
+<script src="/js/app.js?v=62"></script>
 </body>
 </html>

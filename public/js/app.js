@@ -734,32 +734,25 @@ async function switchAccount(id) {
   renderCart();
 }
 
-function openNuevaCuenta() {
-  document.getElementById('cuenta-nombre').value = '';
-  const quick = ['Mesa 1','Mesa 2','Mesa 3','Para llevar','Domicilio'];
-  document.getElementById('cuenta-quick-names').innerHTML = quick.map(n =>
-    `<button class="cuenta-quick-btn" onclick="document.getElementById('cuenta-nombre').value='${n}'">${n}</button>`).join('');
-  openModal('modal-cuenta');
-  setTimeout(()=>document.getElementById('cuenta-nombre')?.focus(),150);
-}
-
-async function confirmNuevaCuenta() {
-  let name = document.getElementById('cuenta-nombre').value.trim();
-  if (!name) name = `Cuenta ${_openAccounts.length+1}`;
+// Al dar "+ Cuenta" se crea una cuenta nueva automáticamente (sin pedir nombre)
+async function openNuevaCuenta() {
+  // Nombre automático: "Cuenta N" con el siguiente número libre
+  const names = new Set(_openAccounts.map(a => a.name));
+  let n = _openAccounts.length + 1;
+  while (names.has('Cuenta ' + n)) n++;
+  const name = 'Cuenta ' + n;
   // Si estamos en venta rápida con productos, se "parquean" en la nueva cuenta
-  const parkItems = (_activeAccountId==null && cart.length) ? _cartSnapshot() : [];
+  const parkItems = (_activeAccountId == null && cart.length) ? _cartSnapshot() : [];
   try {
     const acc = await api('POST', '/api/open-accounts', { name, items: parkItems });
     acc.items = parkItems;
     _openAccounts.push(acc);
     if (parkItems.length) _quickCart = [];
     _activeAccountId = acc.id;
-    cart = parkItems.map(i=>({...i}));
-    closeModal('modal-cuenta');
+    cart = parkItems.map(i => ({...i}));
     renderAccountsBar();
     renderCart();
-    toast(`Cuenta "${acc.name}" abierta`, 'success');
-  } catch(e) { toast('Error al crear la cuenta','error'); }
+  } catch (e) { toast('Error al crear la cuenta', 'error'); }
 }
 
 async function discardAccount(id) {
