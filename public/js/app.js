@@ -1471,7 +1471,9 @@ function _updateStockBadge(p) {
 }
 
 function toggleInfiniteStock(checkbox) {
-  document.getElementById('prod-stock-section').style.display = checkbox.checked ? 'none' : '';
+  // El campo de stock permanece visible siempre; el infinito solo indica
+  // que no se descuenta al vender.
+  document.getElementById('prod-stock-section').style.display = '';
 }
 
 function openProductModal(product = null) {
@@ -1484,7 +1486,8 @@ function openProductModal(product = null) {
   document.getElementById('prod-cost').value    = product?.cost  || '';
   const isInfinite = !!product?.infinite_stock;
   document.getElementById('prod-infinite').checked = isInfinite;
-  document.getElementById('prod-stock-section').style.display = isInfinite ? 'none' : '';
+  // El campo de stock SIEMPRE visible para poder cambiar la cantidad al editar
+  document.getElementById('prod-stock-section').style.display = '';
   document.getElementById('prod-stock').value = product?.stock ?? '';
   document.getElementById('prod-alert').value = product?.low_stock_alert || 5;
   // Imagen
@@ -1532,7 +1535,7 @@ async function saveProduct() {
   const price = parseFloat(document.getElementById('prod-price').value);
   const cost  = parseFloat(document.getElementById('prod-cost').value)  || 0;
   const infinite_stock = document.getElementById('prod-infinite').checked;
-  const stock = infinite_stock ? 0 : (parseFloat(document.getElementById('prod-stock').value) || 0);
+  const stock = parseFloat(document.getElementById('prod-stock').value) || 0;
   const low_stock_alert = parseFloat(document.getElementById('prod-alert').value) || 5;
   if (!name || !price || price <= 0) { toast('Nombre y precio de venta son requeridos', 'error'); return; }
   try {
