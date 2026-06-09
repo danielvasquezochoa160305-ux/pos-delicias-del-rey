@@ -773,7 +773,21 @@ textarea.input { resize: vertical; }
   .t80-total { width: 100%; border-collapse: collapse; }
   .t80-footer { text-align: center; margin-top: 8px; font-size: 11px; }
   .factura { box-shadow: none; margin: 0; padding: 24px; width: 100%; }
-  #ticket-content { font-family: monospace; font-size: 12px; width: 280px; margin: 0 auto; }
+  #ticket-content { font-family: monospace; font-size: 12px; width: 76mm; margin: 0 auto; }
+
+  /* ── Comanda de cocina 80mm ── */
+  .cmd80 { width: 100%; color: #000; font-family: Arial, Helvetica, sans-serif; padding: 0 1mm; }
+  .cmd80-title { text-align: center; font-size: 22px; font-weight: 900; letter-spacing: 1px; }
+  .cmd80-num { text-align: center; font-size: 46px; font-weight: 900; line-height: 1; margin: 1mm 0; }
+  .cmd80-time { text-align: center; font-size: 16px; font-weight: 700; }
+  .cmd80-cliente { text-align: center; font-size: 22px; font-weight: 900; margin-top: 2mm; padding: 1mm; border: 2px solid #000; }
+  .cmd80-rule { border-top: 3px dashed #000; margin: 3mm 0; }
+  .cmd80-item { display: flex; align-items: flex-start; gap: 3mm; padding: 2.5mm 0; border-bottom: 1px dotted #555; }
+  .cmd80-item:last-child { border-bottom: 0; }
+  .cmd80-qty { font-size: 30px; font-weight: 900; min-width: 14mm; }
+  .cmd80-name { font-size: 27px; font-weight: 800; line-height: 1.1; flex: 1; word-break: break-word; text-transform: uppercase; }
+  .cmd80-note { font-size: 18px; font-weight: 800; margin: 2mm 0; padding: 1.5mm 2mm; border: 2px solid #000; text-align: center; }
+  .cmd80-foot { text-align: center; margin-top: 4mm; font-size: 12px; letter-spacing: 2px; }
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -905,6 +919,19 @@ textarea.input { resize: vertical; }
 .comanda-ticket-items td { padding: 3px 0; vertical-align: top; }
 .comanda-ticket-items .qty { font-weight: 900; font-size: 16px; padding-right: 10px; color: var(--sidebar-bg); }
 .comanda-ticket-notes { background: #fff9c4; padding: 8px 10px; border-radius: 6px; margin-top: 8px; font-size: 12px; }
+
+/* Vista previa de la comanda 80mm (igual que la impresión) */
+.cmd80-preview { width: 300px; max-width: 100%; margin: 0 auto; background: #fff; color: #000; font-family: Arial, Helvetica, sans-serif; padding: 14px 12px; border: 1px solid #e2e8f0; border-radius: 8px; box-shadow: var(--shadow-sm); }
+.cmd80-preview .cmd80-title { text-align: center; font-size: 18px; font-weight: 900; letter-spacing: 1px; }
+.cmd80-preview .cmd80-num { text-align: center; font-size: 40px; font-weight: 900; line-height: 1; margin: 4px 0; }
+.cmd80-preview .cmd80-time { text-align: center; font-size: 13px; font-weight: 700; color: #333; }
+.cmd80-preview .cmd80-cliente { text-align: center; font-size: 19px; font-weight: 900; margin-top: 8px; padding: 5px; border: 2px solid #000; }
+.cmd80-preview .cmd80-rule { border-top: 2px dashed #000; margin: 10px 0; }
+.cmd80-preview .cmd80-item { display: flex; align-items: flex-start; gap: 10px; padding: 8px 0; border-bottom: 1px dotted #aaa; }
+.cmd80-preview .cmd80-item:last-child { border-bottom: 0; }
+.cmd80-preview .cmd80-qty { font-size: 26px; font-weight: 900; min-width: 44px; }
+.cmd80-preview .cmd80-name { font-size: 23px; font-weight: 800; line-height: 1.1; flex: 1; word-break: break-word; text-transform: uppercase; }
+.cmd80-preview .cmd80-note { font-size: 15px; font-weight: 800; margin: 6px 0; padding: 5px 8px; border: 2px solid #000; text-align: center; }
 
 /* ═══════════════════════════════════════════════════════
    ACCOUNTING SCREEN

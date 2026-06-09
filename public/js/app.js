@@ -1596,23 +1596,26 @@ async function viewComanda(id) {
 
 function showComandaModal(c) {
   document.getElementById('modal-comanda-title').textContent = `Comanda #${c.id}`;
-  const time = new Date(c.created_at).toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' });
+  const d = new Date(String(c.created_at).replace(' ', 'T'));
+  const fecha = d.toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const hora  = d.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+  const notas = c.notes ? c.notes.split(' | ').filter(Boolean) : [];
+  // Misma estructura que la impresión (vista previa fiel)
   document.getElementById('modal-comanda-body').innerHTML = `
-    <div class="comanda-ticket">
-      <div class="comanda-ticket-header">
-        <div style="font-size:12px;text-transform:uppercase;letter-spacing:1px">COCINA</div>
-        <div class="comanda-ticket-num">#${c.id}</div>
-        <div style="font-size:12px;color:#666">${time}</div>
-        ${c.customer_name ? `<div style="font-weight:700;margin-top:4px">👤 ${c.customer_name}</div>` : ''}
-      </div>
-      <table class="comanda-ticket-items">
+    <div class="cmd80-preview">
+      <div class="cmd80-title">COMANDA COCINA</div>
+      <div class="cmd80-num">#${c.id}</div>
+      <div class="cmd80-time">${fecha} &nbsp; ${hora}</div>
+      ${c.customer_name ? `<div class="cmd80-cliente">${c.customer_name}</div>` : ''}
+      <div class="cmd80-rule"></div>
+      <div class="cmd80-items">
         ${c.items.map(i => `
-          <tr>
-            <td class="qty">${i.quantity}</td>
-            <td>${i.product_name}</td>
-          </tr>`).join('')}
-      </table>
-      ${c.notes ? `<div class="comanda-ticket-notes">📝 ${c.notes}</div>` : ''}
+          <div class="cmd80-item">
+            <span class="cmd80-qty">${i.quantity}×</span>
+            <span class="cmd80-name">${i.product_name}</span>
+          </div>`).join('')}
+      </div>
+      ${notas.length ? `<div class="cmd80-rule"></div><div class="cmd80-notes">${notas.map(n => `<div class="cmd80-note">${n}</div>`).join('')}</div>` : ''}
     </div>`;
   openModal('modal-comanda');
 }
@@ -1620,19 +1623,28 @@ function showComandaModal(c) {
 function printComanda() {
   const c = currentComandaForPrint;
   if (!c) return;
-  const time = new Date(c.created_at).toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' });
+  const d = new Date(String(c.created_at).replace(' ', 'T'));
+  const fecha = d.toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const hora  = d.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+  const notas = c.notes ? c.notes.split(' | ').filter(Boolean) : [];
   document.getElementById('ticket-content').innerHTML = `
-    <div class="ticket-header">
-      <div style="font-size:11px;text-transform:uppercase;letter-spacing:2px">★ COMANDA DE COCINA ★</div>
-      <div style="font-size:28px;font-weight:900">#${c.id}</div>
-      <div>${time}</div>
-      ${c.customer_name ? `<div style="font-weight:bold">${c.customer_name}</div>` : ''}
-      <div>────────────────</div>
+    <div class="cmd80">
+      <div class="cmd80-title">COMANDA COCINA</div>
+      <div class="cmd80-num">#${c.id}</div>
+      <div class="cmd80-time">${fecha} &nbsp; ${hora}</div>
+      ${c.customer_name ? `<div class="cmd80-cliente">${c.customer_name}</div>` : ''}
+      <div class="cmd80-rule"></div>
+      <div class="cmd80-items">
+        ${c.items.map(i => `
+          <div class="cmd80-item">
+            <span class="cmd80-qty">${i.quantity}×</span>
+            <span class="cmd80-name">${i.product_name}</span>
+          </div>`).join('')}
+      </div>
+      <div class="cmd80-rule"></div>
+      ${notas.length ? `<div class="cmd80-notes">${notas.map(n => `<div class="cmd80-note">${n}</div>`).join('')}</div>` : ''}
+      <div class="cmd80-foot">. . . . . . . . . . . . . . . .</div>
     </div>
-    <table class="ticket-items" style="font-size:14px">
-      ${c.items.map(i => `<tr><td style="font-size:20px;font-weight:900;padding-right:8px">${i.quantity}x</td><td>${i.product_name}</td></tr>`).join('')}
-    </table>
-    ${c.notes ? `<div style="margin-top:10px;padding:6px;border:2px dashed #000"><strong>NOTA:</strong> ${c.notes}</div>` : ''}
   `;
   document.getElementById('print-area').style.display = 'block';
   window.print();
