@@ -1139,7 +1139,7 @@ def report_weekly():
             COUNT(*) tickets, COALESCE(SUM(total),0) total
             FROM sales WHERE date(created_at) BETWEEN ? AND ?
             GROUP BY h ORDER BY h""", (d_ini, d_fin)).fetchall()
-        cierres = conn.execute("""SELECT opened_at, closed_at, opening_balance, closing_balance, difference, notes
+        cierres = conn.execute("""SELECT opened_at, closed_at, opening_balance, counted_cash AS closing_balance, difference, notes
             FROM cash_registers WHERE date(opened_at) BETWEEN ? AND ? ORDER BY opened_at""", (d_ini, d_fin)).fetchall()
         perdidas_sem = conn.execute("""SELECT product_name, category, quantity, sale_value, responsible, reason, created_at
             FROM losses WHERE date(created_at) BETWEEN ? AND ? ORDER BY created_at""", (d_ini, d_fin)).fetchall()
@@ -1305,7 +1305,7 @@ def report_monthly():
         por_hora = conn.execute("""SELECT CAST(strftime('%H', created_at) AS INTEGER) h,
             COUNT(*) tickets, COALESCE(SUM(total),0) total
             FROM sales WHERE date(created_at) BETWEEN ? AND ? GROUP BY h ORDER BY h""", (d_ini, d_fin)).fetchall()
-        cierres = conn.execute("""SELECT opened_at, closing_balance, difference, notes
+        cierres = conn.execute("""SELECT opened_at, counted_cash AS closing_balance, difference, notes
             FROM cash_registers WHERE date(opened_at) BETWEEN ? AND ? ORDER BY opened_at""", (d_ini, d_fin)).fetchall()
         perdidas = conn.execute("""SELECT product_name, category, quantity, sale_value, responsible, reason, created_at
             FROM losses WHERE date(created_at) BETWEEN ? AND ? ORDER BY created_at""", (d_ini, d_fin)).fetchall()
@@ -1314,7 +1314,7 @@ def report_monthly():
         workers_stats = conn.execute("""SELECT responsible, COUNT(*) cnt, COALESCE(SUM(sale_value),0) total
             FROM losses WHERE date(created_at) BETWEEN ? AND ? AND responsible IS NOT NULL AND responsible!=''
             GROUP BY responsible ORDER BY total DESC""", (d_ini, d_fin)).fetchall()
-        descuadres = conn.execute("""SELECT difference, opened_at FROM cash_registers
+        descuadres = conn.execute("""SELECT difference, opened_at, counted_cash AS closing_balance FROM cash_registers
             WHERE date(opened_at) BETWEEN ? AND ? AND difference < 0 ORDER BY opened_at""", (d_ini, d_fin)).fetchall()
         semanas_data = []
         from datetime import timedelta as td
