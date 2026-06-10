@@ -875,12 +875,18 @@ def dashboard():
             "SELECT COUNT(*) as count, COALESCE(SUM(total),0) as total FROM sales WHERE date(created_at)=date(?)",
             (today,)
         ).fetchone()
+        # Otros ingresos a caja (NO las ventas ni los movimientos de cierre)
         ingreso = conn.execute(
-            "SELECT COALESCE(SUM(amount),0) as total FROM cash_movements WHERE type='ingreso' AND date(created_at)=date(?)",
+            "SELECT COALESCE(SUM(amount),0) as total FROM cash_movements "
+            "WHERE type='ingreso' AND date(created_at)=date(?) "
+            "AND description NOT LIKE 'Venta #%' AND COALESCE(category,'') <> 'Cierre de caja'",
             (today,)
         ).fetchone()
+        # Gastos reales (excluye el efectivo contado y diferencias del cierre)
         egreso = conn.execute(
-            "SELECT COALESCE(SUM(amount),0) as total FROM cash_movements WHERE type='egreso' AND date(created_at)=date(?)",
+            "SELECT COALESCE(SUM(amount),0) as total FROM cash_movements "
+            "WHERE type='egreso' AND date(created_at)=date(?) "
+            "AND COALESCE(category,'') <> 'Cierre de caja'",
             (today,)
         ).fetchone()
         bajo_stock = conn.execute(
@@ -920,7 +926,8 @@ def dashboard():
         'totalHoy': ventas['total'],
         'ingresoHoy': ingreso['total'],
         'egresoHoy': egreso['total'],
-        'balanceHoy': ingreso['total'] - egreso['total'],
+        # Ganancia del día = ventas + otros ingresos − gastos reales
+        'balanceHoy': ventas['total'] + ingreso['total'] - egreso['total'],
         'bajoStock': rows_to_list(bajo_stock),
         'topProductos': rows_to_list(top_productos),
         'ventasSemana': rows_to_list(ventas_semana),
