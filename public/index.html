@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
   <link href="https://fonts.googleapis.com/css2?family=Pacifico&family=Barlow+Condensed:wght@400;600;700;800&display=swap" rel="stylesheet"/>
-  <link rel="stylesheet" href="/css/style.css?v=72"/>
+  <link rel="stylesheet" href="/css/style.css?v=73"/>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
 </head>
@@ -423,7 +423,10 @@
   <section id="page-dashboard" class="page active">
     <div class="page-header">
       <h1>Dashboard</h1>
-      <span class="date-badge" id="today-label"></span>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <span class="dash-live"><span class="dash-live-dot"></span> En vivo <span id="dash-live-time" style="opacity:.7;font-weight:600"></span></span>
+        <span class="date-badge" id="today-label"></span>
+      </div>
     </div>
 
     <div class="stats-grid">
@@ -1805,6 +1808,6 @@
 
 <div class="toast" id="toast"></div>
 
-<script src="/js/app.js?v=71"></script>
+<script src="/js/app.js?v=72"></script>
 </body>
 </html>

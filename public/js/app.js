@@ -289,7 +289,7 @@ async function api(method, url, body) {
 // ═══════════════════════════════════════════════════════
 //  DASHBOARD
 // ═══════════════════════════════════════════════════════
-async function loadDashboard() {
+async function loadDashboard(silent = false) {
   // Pre-llenar fechas de informes
   const today = new Date().toISOString().slice(0,10);
   const thisMonth = today.slice(0,7);
@@ -332,7 +332,27 @@ async function loadDashboard() {
 
     // Ventas por turno
     renderTurnos(d.turnos || []);
-  } catch (e) { toast(e.message, 'error'); }
+
+    // Indicador "en vivo"
+    const liveEl = document.getElementById('dash-live-time');
+    if (liveEl) liveEl.textContent = 'actualizado ' + new Date().toLocaleTimeString('es-CO', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+
+    // Arrancar el auto-refresco en vivo (una sola vez)
+    startDashboardLive();
+  } catch (e) {
+    if (!silent) toast(e.message, 'error');  // en refrescos automáticos no molestar con toasts
+  }
+}
+
+// ─── Dashboard en tiempo real (auto-refresco) ─────────
+let _dashboardTimer = null;
+function startDashboardLive() {
+  if (_dashboardTimer) return;  // ya está activo
+  _dashboardTimer = setInterval(() => {
+    const dashActiva = document.getElementById('page-dashboard')?.classList.contains('active');
+    const pestañaVisible = document.visibilityState === 'visible';
+    if (dashActiva && pestañaVisible) loadDashboard(true);  // refresco silencioso
+  }, 6000);  // cada 6 segundos
 }
 
 function _turnoLabel(t) {
@@ -460,7 +480,14 @@ function renderHourlyChart(data) {
     picoBadge.style.display = '';
   }
 
-  if (_horaChart) { _horaChart.destroy(); _horaChart = null; }
+  // Si la gráfica ya existe, actualizar datos en el sitio (sin parpadeo)
+  if (_horaChart) {
+    _horaChart.data.labels = labels;
+    _horaChart.data.datasets[0].data = totales;
+    _horaChart.data.datasets[1].data = ventas;
+    _horaChart.update('none');
+    return;
+  }
 
   const ctx = canvas.getContext('2d');
 

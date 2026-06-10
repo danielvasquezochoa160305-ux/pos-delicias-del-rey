@@ -1333,3 +1333,7 @@ textarea.input { resize: vertical; }
 .turno-total { font-size: 19px; font-weight: 900; color: var(--primary); white-space: nowrap; }
 .turno-total-row { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; padding: 14px 16px; background: var(--sidebar-bg, #0f172a); color: #fff; border-radius: var(--radius); font-weight: 700; font-size: 13px; letter-spacing: .3px; }
 .turno-total-big { font-size: 24px; font-weight: 900; color: #4ade80; }
+
+/* Indicador en vivo del dashboard */
+.dash-live { display: inline-flex; align-items: center; gap: 6px; background: #dcfce7; color: #15803d; font-size: 12px; font-weight: 800; padding: 5px 11px; border-radius: 20px; white-space: nowrap; }
+.dash-live-dot { width: 8px; height: 8px; border-radius: 50%; background: #16a34a; display: inline-block; animation: pulse-dot 1.4s infinite; }
