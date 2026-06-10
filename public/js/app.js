@@ -99,6 +99,22 @@ function pinBack() {
   updatePinDots();
 }
 
+// Permite ingresar la clave con el TECLADO FÍSICO (números, Borrar y Enter)
+document.addEventListener('keydown', (e) => {
+  const pinScreen = document.getElementById('pin-screen');
+  if (!pinScreen || getComputedStyle(pinScreen).display === 'none') return;  // solo si la pantalla de clave está visible
+  if (e.key >= '0' && e.key <= '9') {
+    e.preventDefault();
+    pinKey(e.key);
+  } else if (e.key === 'Backspace') {
+    e.preventDefault();
+    pinBack();
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    pinConfirm();
+  }
+});
+
 async function pinConfirm() {
   if (_pinBuffer.length === 0) return;
   const correctPin = _pinRole === 'admin' ? (settings?.pin_admin || '1623') : (settings?.pin_worker || '0000');
