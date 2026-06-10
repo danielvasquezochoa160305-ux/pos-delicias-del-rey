@@ -1522,7 +1522,25 @@ def report_monthly():
 def get_registers():
     with get_db() as conn:
         rows = conn.execute('SELECT * FROM cash_registers ORDER BY opened_at DESC LIMIT 30').fetchall()
-    return jsonify(rows_to_list(rows))
+        result = []
+        for r in rows:
+            d = dict(r)
+            # Desglose de ventas por método de pago en la ventana del turno
+            if r['closed_at']:
+                sbm_rows = conn.execute(
+                    "SELECT payment_method, COALESCE(SUM(total),0) as total FROM sales "
+                    "WHERE created_at >= ? AND created_at <= ? GROUP BY payment_method",
+                    (r['opened_at'], r['closed_at'])
+                ).fetchall()
+            else:
+                sbm_rows = conn.execute(
+                    "SELECT payment_method, COALESCE(SUM(total),0) as total FROM sales "
+                    "WHERE created_at >= ? GROUP BY payment_method",
+                    (r['opened_at'],)
+                ).fetchall()
+            d['sales_by_method'] = {sr['payment_method']: sr['total'] for sr in sbm_rows}
+            result.append(d)
+    return jsonify(result)
 
 @app.route('/api/registers/current', methods=['GET'])
 def get_current_register():
