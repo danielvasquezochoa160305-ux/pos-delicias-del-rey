@@ -761,8 +761,9 @@ textarea.input { resize: vertical; }
 .factura-footer strong { display: block; font-size: 15px; color: var(--primary); margin-bottom: 4px; }
 
 @media print {
+  html, body { height: auto !important; min-height: 0 !important; max-height: none !important; overflow: visible !important; margin: 0 !important; padding: 0 !important; background: #fff !important; }
   body > *:not(#print-area) { display: none !important; }
-  #print-area { display: block !important; }
+  #print-area { display: block !important; width: 80mm; height: auto !important; overflow: visible !important; }
   @page { margin: 0; size: 80mm auto; }
   .t80 { font-family: 'Courier New', monospace; font-size: 11px; width: 72mm; margin: 0 auto; padding: 4mm 0; color: #000; }
   .t80-logo { font-size: 15px; font-weight: bold; text-align: center; margin-bottom: 2px; }
@@ -788,6 +789,9 @@ textarea.input { resize: vertical; }
   .cmd80-name { font-size: 27px; font-weight: 800; line-height: 1.1; flex: 1; word-break: break-word; text-transform: uppercase; }
   .cmd80-note { font-size: 18px; font-weight: 800; margin: 2mm 0; padding: 1.5mm 2mm; border: 2px solid #000; text-align: center; }
   .cmd80-foot { text-align: center; margin-top: 4mm; font-size: 12px; letter-spacing: 2px; }
+  /* Avance de papel: asegura que el ticket completo salga y haya zona para cortar */
+  .cmd80-feed { height: 28mm; }
+  .cmd80 { page-break-inside: avoid; break-inside: avoid; }
 }
 
 /* ═══════════════════════════════════════════════════════

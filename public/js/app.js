@@ -952,6 +952,20 @@ async function confirmCobro() {
     currentSaleForPrint = sale;
     closeModal('modal-cobro');
     toast(`Venta #${sale.id} registrada ✓`, 'success');
+
+    // Crear e IMPRIMIR la comanda de cocina automáticamente al cobrar
+    try {
+      const comNotes = [_consumo, _salsas ? `Salsas: ${_salsas}` : '', notes].filter(Boolean).join(' | ');
+      const comanda = await api('POST', '/api/comandas', {
+        items: _cartSnapshot.map(i => ({ product_name: i.product_name, quantity: i.quantity })),
+        customer_name: _clienteNombre,
+        notes: comNotes
+      });
+      currentComandaForPrint = comanda;
+      updateComandaBadge();
+      printComanda();
+    } catch (ce) { console.error('Comanda:', ce); }
+
     _closeAccountAfterSale();
     clearCart();
     allProducts = await api('GET', '/api/products');
@@ -1763,7 +1777,8 @@ function printComanda() {
       </div>
       <div class="cmd80-rule"></div>
       ${notas.length ? `<div class="cmd80-notes">${notas.map(n => `<div class="cmd80-note">${n}</div>`).join('')}</div>` : ''}
-      <div class="cmd80-foot">. . . . . . . . . . . . . . . .</div>
+      <div class="cmd80-foot">* * *  FIN  * * *</div>
+      <div class="cmd80-feed"></div>
     </div>
   `;
   document.getElementById('print-area').style.display = 'block';
