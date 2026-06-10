@@ -1506,17 +1506,23 @@ function openProductModal(product = null) {
   openModal('modal-product');
 }
 
-function previewProductImage(event) {
+async function previewProductImage(event) {
   const file = event.target.files[0];
   if (!file) return;
-  const reader = new FileReader();
-  reader.onload = e => {
-    const preview = document.getElementById('prod-img-preview');
-    preview.src = e.target.result;
+  const preview = document.getElementById('prod-img-preview');
+  const placeholder = document.getElementById('prod-img-placeholder');
+  try {
+    // Procesar (convierte HEIC y comprime) para que la vista previa sea fiel
+    const blob = await _processImageForUpload(file);
+    preview.src = URL.createObjectURL(blob);
     preview.style.display = 'block';
-    document.getElementById('prod-img-placeholder').style.display = 'none';
-  };
-  reader.readAsDataURL(file);
+    placeholder.style.display = 'none';
+  } catch (e) {
+    toast('No se pudo leer esa imagen. Intenta con otra foto (JPG o PNG).', 'error');
+    preview.style.display = 'none';
+    placeholder.style.display = 'flex';
+    event.target.value = '';
+  }
 }
 
 async function editProduct(id) {
@@ -1547,16 +1553,56 @@ async function saveProduct() {
       saved = await api('POST', '/api/products', { name, category, price, cost, stock, unit, low_stock_alert, infinite_stock });
       toast('Producto creado', 'success');
     }
-    // Subir imagen si se seleccionó una
+    // Subir imagen si se seleccionó una (convertida a JPEG, con aviso si falla)
     const fileInput = document.getElementById('prod-image-file');
     if (fileInput.files[0]) {
-      const formData = new FormData();
-      formData.append('image', fileInput.files[0]);
-      await fetch(`/api/products/${saved.id}/image`, { method: 'POST', body: formData });
+      try {
+        const blob = await _processImageForUpload(fileInput.files[0]);
+        const formData = new FormData();
+        formData.append('image', blob, 'foto.jpg');
+        const res = await fetch(`/api/products/${saved.id}/image`, { method: 'POST', body: formData });
+        if (!res.ok) throw new Error('rechazada');
+      } catch (imgErr) {
+        toast('⚠️ El producto se guardó, pero la foto no se pudo subir. Intenta con otra imagen.', 'error');
+      }
     }
     closeModal('modal-product');
     loadInventory();
   } catch (e) { toast(e.message, 'error'); }
+}
+
+// Convierte cualquier foto (incluido HEIC del iPhone) a JPEG comprimido y del
+// tamaño adecuado, para que siempre cargue y no pese de más.
+async function _processImageForUpload(file, maxSize = 900, quality = 0.85) {
+  let src = file;
+  // Convertir HEIC/HEIF a JPEG si hace falta
+  const esHeic = /heic|heif/i.test(file.type) || /\.(heic|heif)$/i.test(file.name || '');
+  if (esHeic && window.heic2any) {
+    try {
+      src = await heic2any({ blob: file, toType: 'image/jpeg', quality });
+      if (Array.isArray(src)) src = src[0];
+    } catch (e) { /* si falla, intentamos con el archivo original */ }
+  }
+  // Redibujar en canvas para redimensionar y exportar JPEG
+  return await new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(src);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let { width, height } = img;
+      if (Math.max(width, height) > maxSize) {
+        const escala = maxSize / Math.max(width, height);
+        width = Math.round(width * escala);
+        height = Math.round(height * escala);
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width; canvas.height = height;
+      canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+      canvas.toBlob(b => b ? resolve(b) : reject(new Error('canvas')), 'image/jpeg', quality);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('formato no soportado')); };
+    img.src = url;
+  });
 }
 
 async function deleteProduct(id) {
