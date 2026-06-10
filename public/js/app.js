@@ -329,7 +329,63 @@ async function loadDashboard() {
 
     // Gráfico ventas por hora
     renderHourlyChart(d.ventasPorHora || []);
+
+    // Ventas por turno
+    renderTurnos(d.turnos || []);
   } catch (e) { toast(e.message, 'error'); }
+}
+
+function _turnoLabel(t) {
+  // Extrae "Turno mañana/tarde" de las notas, o usa la hora de apertura
+  const notas = t.notes || '';
+  const m = notas.match(/Turno\s+(mañana|tarde|noche)/i);
+  if (m) return 'Turno ' + m[1].toLowerCase();
+  try {
+    const h = new Date(String(t.opened_at).replace(' ', 'T')).getHours();
+    return h < 13 ? 'Turno mañana' : h < 19 ? 'Turno tarde' : 'Turno noche';
+  } catch { return 'Turno'; }
+}
+
+function _horaCorta(s) {
+  if (!s) return '';
+  try { return new Date(String(s).replace(' ', 'T')).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }); }
+  catch { return ''; }
+}
+
+function renderTurnos(turnos) {
+  const cont = document.getElementById('dash-turnos');
+  if (!cont) return;
+  if (!turnos.length) {
+    cont.innerHTML = '<div class="empty-state" style="padding:24px;color:#64748b">Aún no se ha abierto caja hoy</div>';
+    return;
+  }
+  const totalDia = turnos.reduce((s, t) => s + (t.total || 0), 0);
+  const ticketsDia = turnos.reduce((s, t) => s + (t.ventas || 0), 0);
+  const iconos = { 'Turno mañana': '☀️', 'Turno tarde': '🌙', 'Turno noche': '🌃' };
+  cont.innerHTML = `
+    <div class="turnos-list">
+      ${turnos.map((t, i) => {
+        const label = _turnoLabel(t);
+        const icono = iconos[label] || '🕐';
+        const abierto = t.status === 'abierta';
+        const rango = abierto
+          ? `${_horaCorta(t.opened_at)} · en curso`
+          : `${_horaCorta(t.opened_at)} – ${_horaCorta(t.closed_at)}`;
+        return `
+        <div class="turno-row">
+          <div class="turno-icon">${icono}</div>
+          <div class="turno-info">
+            <div class="turno-name">${label} ${abierto ? '<span class="turno-badge-live">● ABIERTA</span>' : ''}</div>
+            <div class="turno-sub">${rango} · ${t.ventas} ticket${t.ventas === 1 ? '' : 's'}</div>
+          </div>
+          <div class="turno-total">${fmt(t.total)}</div>
+        </div>`;
+      }).join('')}
+    </div>
+    <div class="turno-total-row">
+      <span>TOTAL DEL DÍA · ${ticketsDia} ticket${ticketsDia === 1 ? '' : 's'}</span>
+      <span class="turno-total-big">${fmt(totalDia)}</span>
+    </div>`;
 }
 
 // ─── Descargar informes ───────────────────────────────

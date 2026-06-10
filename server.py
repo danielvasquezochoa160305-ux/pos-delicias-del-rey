@@ -914,6 +914,27 @@ def dashboard():
             GROUP BY hora ORDER BY hora
         """, (today,)).fetchall()
 
+        # Ventas por TURNO de hoy. Cada venta se atribuye al turno que estaba
+        # abierto (desde su apertura hasta que abre el siguiente turno).
+        turnos_raw = conn.execute("""
+            WITH regs AS (
+                SELECT r.*,
+                  (SELECT MIN(r2.opened_at) FROM cash_registers r2
+                     WHERE r2.opened_at > r.opened_at) AS next_open
+                FROM cash_registers r
+                WHERE date(r.opened_at) = date(?)
+            )
+            SELECT id, opened_at, closed_at, status, notes, opening_balance,
+              (SELECT COUNT(*) FROM sales s
+                 WHERE s.created_at >= regs.opened_at
+                   AND (regs.next_open IS NULL OR s.created_at < regs.next_open)) AS ventas,
+              (SELECT COALESCE(SUM(s.total),0) FROM sales s
+                 WHERE s.created_at >= regs.opened_at
+                   AND (regs.next_open IS NULL OR s.created_at < regs.next_open)) AS total
+            FROM regs ORDER BY opened_at
+        """, (today,)).fetchall()
+        turnos = rows_to_list(turnos_raw)
+
     # Rellenar las 24 horas (0-23) con 0 si no hay datos
     hora_map = {r['hora']: {'ventas': r['ventas'], 'total': r['total']} for r in ventas_hora_raw}
     ventas_por_hora = [
@@ -932,6 +953,7 @@ def dashboard():
         'topProductos': rows_to_list(top_productos),
         'ventasSemana': rows_to_list(ventas_semana),
         'ventasPorHora': ventas_por_hora,
+        'turnos': turnos,
     })
 
 # ─── REPORTES ────────────────────────────────────────────────────────────────
@@ -1605,22 +1627,12 @@ def close_register(rid):
         """, (counted_cash, total_sales, total_cash_sales, total_in, total_out,
               expected_cash, difference, notes, rid))
 
-        # Registrar el efectivo contado como egreso de cierre
+        # NOTA: el cierre ya NO descuenta el efectivo de la caja (no crea egresos).
+        # El efectivo contado y la diferencia quedan guardados en el registro
+        # solo para el reporte de cierre. Cada cierre deja la caja lista para
+        # abrir un nuevo turno desde cero.
         closed_date = datetime.now().strftime('%d/%m/%Y')
         turno_label = notes.split(' — ')[0] if notes else 'Turno'
-        cierre_desc = f"CIERRE DE CAJA {closed_date} — {turno_label}"
-        conn.execute(
-            "INSERT INTO cash_movements (type, amount, description, category) VALUES ('egreso', ?, ?, 'Cierre de caja')",
-            (counted_cash, cierre_desc)
-        )
-        # Si hay diferencia, registrarla también
-        if difference != 0:
-            diff_desc = f"Diferencia de efectivo — {closed_date}"
-            diff_type = 'ingreso' if difference > 0 else 'egreso'
-            conn.execute(
-                "INSERT INTO cash_movements (type, amount, description, category) VALUES (?, ?, ?, 'Cierre de caja')",
-                (diff_type, abs(difference), diff_desc)
-            )
 
         # ── Asientos contables automáticos del cierre ──
         today_str = datetime.now().strftime('%Y-%m-%d')

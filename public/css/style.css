@@ -1320,3 +1320,16 @@ textarea.input { resize: vertical; }
 .stock-inf-btn { width: 28px; height: 28px; border: 1.5px solid var(--border); background: #fff; border-radius: 7px; font-size: 16px; font-weight: 800; color: var(--text-muted); cursor: pointer; line-height: 1; margin-left: 4px; transition: all .12s; }
 .stock-inf-btn:hover { border-color: #16a34a; color: #16a34a; }
 .stock-inf-btn.active { background: #16a34a; color: #fff; border-color: #16a34a; }
+
+/* ═══════════════ VENTAS POR TURNO ═══════════════ */
+.turnos-list { display: flex; flex-direction: column; gap: 8px; }
+.turno-row { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius); transition: border-color .15s; }
+.turno-row:hover { border-color: var(--primary); }
+.turno-icon { font-size: 26px; width: 40px; text-align: center; }
+.turno-info { flex: 1; min-width: 0; }
+.turno-name { font-weight: 800; font-size: 15px; color: var(--text); display: flex; align-items: center; gap: 8px; }
+.turno-badge-live { font-size: 10px; font-weight: 800; color: #16a34a; background: #dcfce7; padding: 2px 7px; border-radius: 20px; letter-spacing: .3px; }
+.turno-sub { font-size: 12.5px; color: var(--text-muted); margin-top: 2px; }
+.turno-total { font-size: 19px; font-weight: 900; color: var(--primary); white-space: nowrap; }
+.turno-total-row { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; padding: 14px 16px; background: var(--sidebar-bg, #0f172a); color: #fff; border-radius: var(--radius); font-weight: 700; font-size: 13px; letter-spacing: .3px; }
+.turno-total-big { font-size: 24px; font-weight: 900; color: #4ade80; }
