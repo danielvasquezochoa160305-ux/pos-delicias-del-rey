@@ -2138,11 +2138,16 @@ async function showCierreReport(reg) {
   const turnoLabel  = noteParts.find(p => /Turno/.test(p)) || '';
   const notaExtra   = noteParts.filter(p => !/🏢|👩|👨|Turno/.test(p)).join(' — ');
 
-  // ── Ventas por método ────────────────────────────────
+  // ── Ventas por método (acepta {total,count} o número) ──
   const sbm        = reg.sales_by_method || {};
-  const cashSales  = sbm['efectivo']      || 0;
-  const transSales = sbm['transferencia'] || 0;
-  const cardSales  = sbm['tarjeta']       || 0;
+  const _mTotal = v => (v && typeof v === 'object') ? (v.total || 0) : (v || 0);
+  const _mCount = v => (v && typeof v === 'object') ? (v.count || 0) : 0;
+  const cashSales  = _mTotal(sbm['efectivo']);
+  const transSales = _mTotal(sbm['transferencia']);
+  const cardSales  = _mTotal(sbm['tarjeta']);
+  const cashCount  = _mCount(sbm['efectivo']);
+  const transCount = _mCount(sbm['transferencia']);
+  const cardCount  = _mCount(sbm['tarjeta']);
   const diff       = reg.difference ?? 0;
   const diffSign   = diff >= 0 ? '+' : '';
   const expectedEf = reg.opening_balance + cashSales + (reg.total_in || 0) - (reg.total_out || 0);
@@ -2236,14 +2241,17 @@ async function showCierreReport(reg) {
         <div style="background:#f0fdf4;border-radius:8px;padding:8px 6px;text-align:center;border:1px solid #bbf7d0">
           <div style="font-size:9px;font-weight:700;color:#16a34a;text-transform:uppercase;margin-bottom:2px">💵 Efectivo</div>
           <div style="font-size:15px;font-weight:900;color:#15803d">${fmt(cashSales)}</div>
+          <div style="font-size:10px;color:#16a34a;font-weight:600;margin-top:1px">${cashCount} venta${cashCount===1?'':'s'}</div>
         </div>
         <div style="background:#eff6ff;border-radius:8px;padding:8px 6px;text-align:center;border:1px solid #bfdbfe">
           <div style="font-size:9px;font-weight:700;color:#2563eb;text-transform:uppercase;margin-bottom:2px">📲 Transfer.</div>
           <div style="font-size:15px;font-weight:900;color:#1d4ed8">${fmt(transSales)}</div>
+          <div style="font-size:10px;color:#2563eb;font-weight:600;margin-top:1px">${transCount} venta${transCount===1?'':'s'}</div>
         </div>
         <div style="background:#faf5ff;border-radius:8px;padding:8px 6px;text-align:center;border:1px solid #e9d5ff">
           <div style="font-size:9px;font-weight:700;color:#7c3aed;text-transform:uppercase;margin-bottom:2px">💳 Tarjeta</div>
           <div style="font-size:15px;font-weight:900;color:#6d28d9">${fmt(cardSales)}</div>
+          <div style="font-size:10px;color:#7c3aed;font-weight:600;margin-top:1px">${cardCount} venta${cardCount===1?'':'s'}</div>
         </div>
       </div>
 

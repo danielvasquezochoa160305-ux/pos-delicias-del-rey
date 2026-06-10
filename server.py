@@ -325,6 +325,14 @@ def init_db():
         except Exception:
             pass
 
+        # Limpieza: el cierre de caja ya NO se registra como movimiento.
+        # Quitar los movimientos de "Cierre de caja" (efectivo contado y
+        # diferencias) que quedaron de versiones anteriores.
+        try:
+            conn.execute("DELETE FROM cash_movements WHERE category='Cierre de caja'")
+        except Exception:
+            pass
+
         # Migración: agregar note_type a worker_notes
         try:
             conn.execute("ALTER TABLE worker_notes ADD COLUMN note_type TEXT NOT NULL DEFAULT 'nota'")
@@ -1528,17 +1536,17 @@ def get_registers():
             # Desglose de ventas por método de pago en la ventana del turno
             if r['closed_at']:
                 sbm_rows = conn.execute(
-                    "SELECT payment_method, COALESCE(SUM(total),0) as total FROM sales "
+                    "SELECT payment_method, COALESCE(SUM(total),0) as total, COUNT(*) as count FROM sales "
                     "WHERE created_at >= ? AND created_at <= ? GROUP BY payment_method",
                     (r['opened_at'], r['closed_at'])
                 ).fetchall()
             else:
                 sbm_rows = conn.execute(
-                    "SELECT payment_method, COALESCE(SUM(total),0) as total FROM sales "
+                    "SELECT payment_method, COALESCE(SUM(total),0) as total, COUNT(*) as count FROM sales "
                     "WHERE created_at >= ? GROUP BY payment_method",
                     (r['opened_at'],)
                 ).fetchall()
-            d['sales_by_method'] = {sr['payment_method']: sr['total'] for sr in sbm_rows}
+            d['sales_by_method'] = {sr['payment_method']: {'total': sr['total'], 'count': sr['count']} for sr in sbm_rows}
             result.append(d)
     return jsonify(result)
 
@@ -1629,12 +1637,13 @@ def close_register(rid):
         expected_cash = reg['opening_balance'] + total_cash_sales + total_in - total_out
         difference = counted_cash - expected_cash
 
-        # Ventas agrupadas por método de pago
+        # Ventas agrupadas por método de pago (con total y conteo)
         sales_by_method_rows = conn.execute(
-            "SELECT payment_method, COALESCE(SUM(total),0) as total FROM sales WHERE created_at >= ? GROUP BY payment_method",
+            "SELECT payment_method, COALESCE(SUM(total),0) as total, COUNT(*) as count "
+            "FROM sales WHERE created_at >= ? GROUP BY payment_method",
             (opened_at,)
         ).fetchall()
-        sales_by_method = {r['payment_method']: r['total'] for r in sales_by_method_rows}
+        sales_by_method = {r['payment_method']: {'total': r['total'], 'count': r['count']} for r in sales_by_method_rows}
 
         conn.execute("""
             UPDATE cash_registers SET
@@ -1694,7 +1703,7 @@ def close_register(rid):
         nombre = cfg.get('negocio_nombre', 'Cafetería')
         fecha = datetime.now().strftime('%d/%m/%Y %H:%M')
         diff_sign = '+' if difference >= 0 else ''
-        metodos_str = ' | '.join([f'{k}: ${v:,.0f}' for k, v in sales_by_method.items()]) or 'Sin ventas'
+        metodos_str = ' | '.join([f'{k}: ${v["total"]:,.0f} ({v["count"]})' for k, v in sales_by_method.items()]) or 'Sin ventas'
         msg = (
             f'🏪 {nombre} — Cierre de caja\n'
             f'📅 {fecha}\n\n'
