@@ -800,6 +800,30 @@ def get_sale(sid):
     result['items'] = rows_to_list(items)
     return jsonify(result)
 
+@app.route('/api/sales/<int:sid>', methods=['DELETE'])
+def delete_sale(sid):
+    """Elimina la venta por completo: restaura el stock, quita su movimiento
+    de caja y la borra. Deja de contar en ventas, dashboard y cierre."""
+    with get_db() as conn:
+        sale = conn.execute('SELECT * FROM sales WHERE id=?', (sid,)).fetchone()
+        if not sale:
+            return jsonify({'error': 'Venta no encontrada'}), 404
+        # Restaurar stock de los productos vendidos (los de stock finito)
+        items = conn.execute('SELECT product_id, quantity FROM sale_items WHERE sale_id=?', (sid,)).fetchall()
+        for it in items:
+            if it['product_id']:
+                conn.execute('UPDATE products SET stock = stock + ? WHERE id=? AND infinite_stock=0',
+                             (it['quantity'], it['product_id']))
+        # Quitar el movimiento de caja de la venta
+        conn.execute("DELETE FROM cash_movements WHERE type='ingreso' AND description=?", (f'Venta #{sid}',))
+        # Quitar devoluciones asociadas (si las hubiera de versiones anteriores)
+        conn.execute('DELETE FROM return_items WHERE return_id IN (SELECT id FROM returns WHERE sale_id=?)', (sid,))
+        conn.execute('DELETE FROM returns WHERE sale_id=?', (sid,))
+        # Borrar la venta y sus ítems
+        conn.execute('DELETE FROM sale_items WHERE sale_id=?', (sid,))
+        conn.execute('DELETE FROM sales WHERE id=?', (sid,))
+    return jsonify({'ok': True})
+
 @app.route('/api/sales', methods=['POST'])
 def create_sale():
     d = request.json
