@@ -1999,6 +1999,7 @@ async function confirmarApertura() {
   try {
     const reg = await api('POST', '/api/registers', { opening_balance, notes });
     currentRegister = reg;
+    _billetesConteos.apertura = {};  // limpiar la calculadora para la próxima apertura
     closeModal('modal-apertura');
     toast(`Caja abierta · ${turnoLabel}`, 'success');
     renderRegisterBanner(reg);
@@ -2010,6 +2011,7 @@ var _cierreSummary = null;
 
 async function prepararCierre() {
   if (!currentRegister) { toast('No hay caja abierta', 'error'); return; }
+  _billetesConteos.cierre = {};  // nuevo cierre: la calculadora arranca en cero
   try {
     const summary = await api('GET', '/api/registers/current/summary');
     _cierreSummary = summary;
@@ -2383,6 +2385,8 @@ const MONEDAS = [
 ];
 
 var _billetesTarget = 'cierre'; // 'cierre' | 'apertura'
+// Guarda las cantidades contadas para que NO se borren al cerrar la calculadora
+var _billetesConteos = { apertura: {}, cierre: {} };
 
 function abrirContadorBilletes() {
   _billetesTarget = 'cierre';
@@ -2410,7 +2414,7 @@ function renderDenomGrid(containerId, denoms) {
       <div class="billete-controls">
         <button class="billete-btn" onclick="changeDenom(${d.valor}, -1)">−</button>
         <input class="billete-input" id="denom-${String(d.valor).replace('.','_')}"
-          type="number" min="0" value="0" oninput="calcBilletesTotal()"/>
+          type="number" min="0" value="${(_billetesConteos[_billetesTarget] || {})[d.valor] || 0}" oninput="calcBilletesTotal()"/>
         <button class="billete-btn" onclick="changeDenom(${d.valor}, 1)">+</button>
       </div>
       <div class="billete-subtotal" id="sub-${String(d.valor).replace('.','_')}"></div>
@@ -2430,12 +2434,14 @@ var _billetesTotalRaw = 0; // valor numérico exacto (evitar parsear texto forma
 
 function calcBilletesTotal() {
   let total = 0;
+  const conteo = (_billetesConteos[_billetesTarget] = _billetesConteos[_billetesTarget] || {});
   [...BILLETES, ...MONEDAS].forEach(d => {
     const id = 'denom-' + String(d.valor).replace('.', '_');
     const subId = 'sub-' + String(d.valor).replace('.', '_');
     const input = document.getElementById(id);
     if (!input) return;
     const qty = parseInt(input.value) || 0;
+    conteo[d.valor] = qty;  // recordar la cantidad
     const sub = qty * d.valor;
     total += sub;
     const subEl = document.getElementById(subId);
