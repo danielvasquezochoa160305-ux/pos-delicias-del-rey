@@ -2016,7 +2016,7 @@ async function prepararCierre() {
     renderCierreModal(summary);
     openModal('modal-cierre');
     setTimeout(() => {
-      const inp = document.getElementById('cierre-contado');
+      const inp = document.getElementById('cierre-contado-efectivo');
       if (inp) inp.focus();
     }, 120);
   } catch (e) { toast(e.message, 'error'); }
@@ -2040,7 +2040,7 @@ function renderCierreModal(s) {
     const isEfectivo = methodKey === 'efectivo';
     const inputId  = `cierre-contado-${methodKey}`;
     const diffId   = `cierre-diff-val-${methodKey}`;
-    const pagosLabel = showCount ? `Pagos (${showCount})` : 'Pagos';
+    const pagosLabel = showCount ? `Ventas en efectivo (${showCount})` : 'Ventas en efectivo';
     const contadorBtn = isEfectivo
       ? `<button class="btn-contador" onclick="abrirContadorBilletes()" title="Contar billetes">🧮</button>`
       : '';
@@ -2081,10 +2081,24 @@ function renderCierreModal(s) {
       </div>`;
   }
 
+  // Solo se CUENTA el efectivo. Transferencia y tarjeta son electrónicos:
+  // se muestran como referencia (no se cuentan, no generan descuadre).
+  function _infoMetodo(icon, title, data) {
+    if (!data || !data.total) return '';
+    return `
+      <div class="cierre-info-metodo">
+        <span>${icon} ${title} <small style="color:var(--text-muted)">(${data.count} pago${data.count === 1 ? '' : 's'})</small></span>
+        <strong>${fmt(data.total)}</strong>
+      </div>`;
+  }
+
   document.getElementById('modal-cierre-body').innerHTML =
-    metodoPagoSection('💵', 'EFECTIVO', expectedEfectivo, cashData.count, 'efectivo') +
-    (cardData.total > 0 ? metodoPagoSection('💳', 'DATAFONO / TARJETA', cardData.total, cardData.count, 'tarjeta') : '') +
-    (transData.total > 0 ? metodoPagoSection('📲', 'TRANSFERENCIAS', transData.total, transData.count, 'transferencia') : '');
+    metodoPagoSection('💵', 'EFECTIVO EN CAJA', expectedEfectivo, cashData.count, 'efectivo') +
+    ((transData.total > 0 || cardData.total > 0)
+      ? `<div class="cierre-info-titulo">Pagos electrónicos (solo referencia — no se cuentan)</div>
+         ${_infoMetodo('📲', 'Transferencias', transData)}
+         ${_infoMetodo('💳', 'Tarjeta / Datáfono', cardData)}`
+      : '');
 }
 
 function updateDiffLive(methodKey, expected) {

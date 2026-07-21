@@ -1337,3 +1337,8 @@ textarea.input { resize: vertical; }
 /* Indicador en vivo del dashboard */
 .dash-live { display: inline-flex; align-items: center; gap: 6px; background: #dcfce7; color: #15803d; font-size: 12px; font-weight: 800; padding: 5px 11px; border-radius: 20px; white-space: nowrap; }
 .dash-live-dot { width: 8px; height: 8px; border-radius: 50%; background: #16a34a; display: inline-block; animation: pulse-dot 1.4s infinite; }
+
+/* Cierre: pagos electrónicos (solo referencia) */
+.cierre-info-titulo { font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: .4px; margin: 14px 0 6px; }
+.cierre-info-metodo { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: #f8fafc; border: 1px solid var(--border); border-radius: 10px; margin-bottom: 6px; font-size: 14px; }
+.cierre-info-metodo strong { font-size: 15px; }
