@@ -1625,7 +1625,8 @@ def current_register_summary():
             "SELECT COUNT(*) as c, COALESCE(SUM(total),0) as t FROM sales WHERE created_at >= ?",
             (opened_at,)
         ).fetchone()
-        cierre_pendiente = _cierre_pendiente(conn, datetime.now().strftime('%Y-%m-%d'))
+        turno_cl = _turno_checklist(reg['notes'])
+        cierre_pendiente = _checklist_pendiente(conn, datetime.now().strftime('%Y-%m-%d'), turno_cl)
     sbm = {r['payment_method']: {'total': r['total'], 'count': r['count']} for r in sales_by_method_rows}
     return jsonify({
         'opening_balance': reg['opening_balance'],
@@ -1636,6 +1637,7 @@ def current_register_summary():
         'total_orders': total_orders['c'],
         'total_amount': total_orders['t'],
         'cierre_pendiente': cierre_pendiente,
+        'checklist_turno': turno_cl,
     })
 
 @app.route('/api/registers/<int:rid>/close', methods=['PUT'])
@@ -1650,13 +1652,17 @@ def close_register(rid):
         if not reg or reg['status'] == 'cerrada':
             return jsonify({'error': 'Caja no encontrada o ya cerrada'}), 400
 
-        # No dejar cerrar hasta completar el checklist de cierre
+        # No dejar cerrar hasta completar el checklist del turno
+        # (turno mañana -> checklist de apertura; turno tarde -> checklist de cierre)
         today = datetime.now().strftime('%Y-%m-%d')
-        cpend = _cierre_pendiente(conn, today)
+        turno_cl = _turno_checklist(reg['notes'])
+        cpend = _checklist_pendiente(conn, today, turno_cl)
         if cpend:
+            etiqueta = 'de la mañana' if turno_cl == 'apertura' else 'de cierre'
             return jsonify({
-                'error': 'Completa el checklist de cierre antes de cerrar la caja',
-                'checklist_pendiente': cpend
+                'error': f'Completa el checklist {etiqueta} antes de cerrar la caja',
+                'checklist_pendiente': cpend,
+                'checklist_turno': turno_cl
             }), 400
 
         opened_at = reg['opened_at']
@@ -2432,15 +2438,23 @@ def _extract_responsable(notes):
     parts = [p.strip() for p in str(notes).split(' — ')]
     return parts[1] if len(parts) > 1 else ''
 
-def _cierre_pendiente(conn, today):
-    """Lista de tareas del checklist de CIERRE que faltan hoy."""
+def _turno_checklist(notes):
+    """Según el turno de la caja, qué checklist se exige para cerrar:
+    turno mañana -> checklist de 'apertura'; turno tarde -> checklist de 'cierre'."""
+    n = (notes or '').lower()
+    if 'mañana' in n or 'manana' in n:
+        return 'apertura'
+    return 'cierre'
+
+def _checklist_pendiente(conn, today, turno):
+    """Lista de tareas del checklist del turno indicado que faltan hoy."""
     items = conn.execute(
-        "SELECT id, text FROM checklist_items WHERE turno='cierre' AND active=1"
+        "SELECT id, text FROM checklist_items WHERE turno=? AND active=1", (turno,)
     ).fetchall()
     if not items:
         return []
     done = {r['item_id'] for r in conn.execute(
-        "SELECT item_id FROM checklist_logs WHERE date=? AND turno='cierre'", (today,)
+        "SELECT item_id FROM checklist_logs WHERE date=? AND turno=?", (today, turno)
     ).fetchall()}
     return [it['text'] for it in items if it['id'] not in done]
 
@@ -2487,13 +2501,15 @@ def check_reminders():
                     alerta(f'ASEO-17-{today}', 'aseo', '5:00 PM', pend)
                     ensure(f'ASEO-17-{today}', f'🧹 Aseo pendiente (5:00 PM){quien}: ' + '; '.join(pend))
 
-        # Checklist de cierre (6 PM)
+        # Checklist del turno abierto (6 PM)
         if hour >= 18:
-            cpend = _cierre_pendiente(conn, today)
+            turno_cl = _turno_checklist(reg['notes']) if reg else 'cierre'
+            cpend = _checklist_pendiente(conn, today, turno_cl)
             if cpend:
+                etiqueta = 'de la mañana' if turno_cl == 'apertura' else 'de cierre'
                 alerta(f'CIERRE-18-{today}', 'cierre', '6:00 PM', cpend)
                 ensure(f'CIERRE-18-{today}',
-                       f'📋 Checklist de cierre pendiente (6:00 PM){quien}: ' + '; '.join(cpend))
+                       f'📋 Checklist {etiqueta} pendiente (6:00 PM){quien}: ' + '; '.join(cpend))
     return jsonify({'ok': True, 'alerts': alerts})
 
 @app.route('/api/checklist', methods=['GET'])

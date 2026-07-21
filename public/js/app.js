@@ -2014,12 +2014,14 @@ async function prepararCierre() {
   _billetesConteos.cierre = {};  // nuevo cierre: la calculadora arranca en cero
   try {
     const summary = await api('GET', '/api/registers/current/summary');
-    // No dejar cerrar hasta completar el checklist de cierre
+    // No dejar cerrar hasta completar el checklist del turno
     const pend = summary.cierre_pendiente || [];
     if (pend.length) {
+      const turnoCl = summary.checklist_turno || 'cierre';
+      const etiqueta = turnoCl === 'apertura' ? 'de la MAÑANA' : 'de CIERRE';
       const lista = pend.map(t => `• ${t}`).join('\n');
-      if (confirm(`⛔ No puedes cerrar la caja todavía.\n\nFalta el checklist de CIERRE:\n\n${lista}\n\n¿Ir al Checklist para completarlo?`)) {
-        _checklistTurno = 'cierre';
+      if (confirm(`⛔ No puedes cerrar la caja todavía.\n\nFalta el checklist ${etiqueta}:\n\n${lista}\n\n¿Ir al Checklist para completarlo?`)) {
+        _checklistTurno = turnoCl;
         document.querySelector('.nav-item[data-page="checklist"]')?.click();
       }
       return;
