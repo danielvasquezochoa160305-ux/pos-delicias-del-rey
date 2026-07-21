@@ -3958,8 +3958,37 @@ function initNovedades() {
   }
 }
 
+let _dismissedReminders = new Set();
+let _reminderActivo = null;
+
 async function _checkReminders() {
-  try { await api('POST', '/api/checklist/check-reminders', {}); } catch(e) {}
+  try {
+    const res = await api('POST', '/api/checklist/check-reminders', {});
+    const alerts = res.alerts || [];
+    // Mostrar la primera alerta que no se haya descartado en esta sesión
+    if (_reminderActivo) return;  // ya hay una en pantalla
+    const nueva = alerts.find(a => !_dismissedReminders.has(a.ref));
+    if (nueva) mostrarRecordatorio(nueva);
+  } catch(e) {}
+}
+
+function mostrarRecordatorio(a) {
+  _reminderActivo = a;
+  const esCierre = a.tipo === 'cierre';
+  document.getElementById('reminder-icon').textContent = esCierre ? '📋' : '🧹';
+  document.getElementById('reminder-hora').textContent = '⏰ Son las ' + a.hora;
+  document.getElementById('reminder-title').textContent = esCierre
+    ? 'Falta el checklist de CIERRE' : 'Falta el ASEO';
+  document.getElementById('reminder-persona').textContent = a.persona ? '👤 ' + a.persona : '';
+  document.getElementById('reminder-tareas').innerHTML =
+    (a.tareas || []).map(t => `<div class="rt-item">${esc(t)}</div>`).join('');
+  document.getElementById('reminder-overlay').style.display = 'flex';
+}
+
+function cerrarRecordatorio() {
+  if (_reminderActivo) _dismissedReminders.add(_reminderActivo.ref);
+  document.getElementById('reminder-overlay').style.display = 'none';
+  _reminderActivo = null;
 }
 
 async function checkNuevasNovedades() {

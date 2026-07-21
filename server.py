@@ -2451,7 +2451,7 @@ def check_reminders():
     now = datetime.now()
     today = now.strftime('%Y-%m-%d')
     hour = now.hour
-    created = []
+    alerts = []
     with get_db() as conn:
         reg = conn.execute(
             "SELECT notes FROM cash_registers WHERE status='abierta' ORDER BY opened_at DESC LIMIT 1"
@@ -2460,13 +2460,14 @@ def check_reminders():
         quien = f' · {opener}' if opener else ''
 
         def ensure(ref, desc):
-            exists = conn.execute("SELECT 1 FROM novedades WHERE ref=?", (ref,)).fetchone()
-            if not exists:
+            if not conn.execute("SELECT 1 FROM novedades WHERE ref=?", (ref,)).fetchone():
                 conn.execute(
                     "INSERT INTO novedades (tipo, descripcion, reportado_por, ref) VALUES (?,?,?,?)",
                     ('recordatorio', desc, 'Sistema', ref)
                 )
-                created.append(ref)
+
+        def alerta(ref, tipo, hora, tareas):
+            alerts.append({'ref': ref, 'tipo': tipo, 'hora': hora, 'persona': opener, 'tareas': tareas})
 
         # Aseo del día (3 PM y 5 PM)
         dia = _dia_actual()
@@ -2480,17 +2481,20 @@ def check_reminders():
             pend = [it['text'] for it in aseo_items if it['id'] not in done]
             if pend:
                 if hour >= 15:
+                    alerta(f'ASEO-15-{today}', 'aseo', '3:00 PM', pend)
                     ensure(f'ASEO-15-{today}', f'🧹 Aseo pendiente (3:00 PM){quien}: ' + '; '.join(pend))
                 if hour >= 17:
+                    alerta(f'ASEO-17-{today}', 'aseo', '5:00 PM', pend)
                     ensure(f'ASEO-17-{today}', f'🧹 Aseo pendiente (5:00 PM){quien}: ' + '; '.join(pend))
 
         # Checklist de cierre (6 PM)
         if hour >= 18:
             cpend = _cierre_pendiente(conn, today)
             if cpend:
+                alerta(f'CIERRE-18-{today}', 'cierre', '6:00 PM', cpend)
                 ensure(f'CIERRE-18-{today}',
                        f'📋 Checklist de cierre pendiente (6:00 PM){quien}: ' + '; '.join(cpend))
-    return jsonify({'ok': True, 'created': created})
+    return jsonify({'ok': True, 'alerts': alerts})
 
 @app.route('/api/checklist', methods=['GET'])
 def get_checklist():

@@ -1346,3 +1346,19 @@ textarea.input { resize: vertical; }
 /* Diferencia total del cierre (efectivo + electrónicos) */
 .cierre-total-diff { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 16px; padding: 15px 18px; background: #f8fafc; border: 2px solid var(--border); border-radius: 12px; font-weight: 800; font-size: 14px; color: var(--text); }
 .cierre-total-diff .diferencia-val { font-size: 22px; font-weight: 900; }
+
+/* ═══════════════ ALERTA A PANTALLA COMPLETA (RECORDATORIOS) ═══════════════ */
+.reminder-overlay { position: fixed; inset: 0; z-index: 99999; background: rgba(15,23,42,.92); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; padding: 24px; animation: reminder-in .25s ease; }
+@keyframes reminder-in { from { opacity: 0; } to { opacity: 1; } }
+.reminder-card { background: #fff; border-radius: 24px; padding: 40px 36px; max-width: 560px; width: 100%; text-align: center; box-shadow: 0 25px 70px rgba(0,0,0,.5); border-top: 10px solid var(--primary); }
+.reminder-icon { font-size: 72px; line-height: 1; margin-bottom: 10px; animation: reminder-bounce 1.2s infinite; }
+@keyframes reminder-bounce { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+.reminder-hora { display: inline-block; background: var(--primary); color: #fff; font-size: 15px; font-weight: 900; padding: 6px 18px; border-radius: 999px; letter-spacing: .5px; margin-bottom: 14px; }
+.reminder-title { font-size: 28px; font-weight: 900; color: var(--text); line-height: 1.2; }
+.reminder-persona { font-size: 19px; font-weight: 700; color: var(--primary); margin-top: 6px; }
+.reminder-tareas { margin: 20px 0 26px; text-align: left; background: #f8fafc; border: 1.5px solid var(--border); border-radius: 14px; padding: 16px 18px; max-height: 40vh; overflow-y: auto; }
+.reminder-tareas .rt-item { display: flex; align-items: flex-start; gap: 10px; padding: 8px 0; font-size: 17px; font-weight: 600; color: var(--text); border-bottom: 1px dashed var(--border); }
+.reminder-tareas .rt-item:last-child { border-bottom: 0; }
+.reminder-tareas .rt-item::before { content: '☐'; font-size: 20px; color: var(--primary); flex-shrink: 0; }
+.reminder-btn { width: 100%; padding: 16px; background: var(--primary); color: #fff; border: none; border-radius: 14px; font-size: 18px; font-weight: 800; cursor: pointer; transition: background .15s; }
+.reminder-btn:hover { background: var(--primary-dark); }

@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
   <link href="https://fonts.googleapis.com/css2?family=Pacifico&family=Barlow+Condensed:wght@400;600;700;800&display=swap" rel="stylesheet"/>
-  <link rel="stylesheet" href="/css/style.css?v=75"/>
+  <link rel="stylesheet" href="/css/style.css?v=76"/>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
 </head>
@@ -1696,6 +1696,18 @@
   <div id="ticket-content"></div>
 </div>
 
+<!-- ═══ ALERTA A PANTALLA COMPLETA (RECORDATORIOS) ═══ -->
+<div id="reminder-overlay" class="reminder-overlay" style="display:none">
+  <div class="reminder-card">
+    <div class="reminder-icon" id="reminder-icon">⏰</div>
+    <div class="reminder-hora" id="reminder-hora"></div>
+    <div class="reminder-title" id="reminder-title">Recordatorio</div>
+    <div class="reminder-persona" id="reminder-persona"></div>
+    <div class="reminder-tareas" id="reminder-tareas"></div>
+    <button class="reminder-btn" onclick="cerrarRecordatorio()">Entendido ✓</button>
+  </div>
+</div>
+
 <!-- ═══ MODAL IMPORTAR INVENTARIO ═══ -->
 <div class="modal-overlay" id="modal-import" onclick="closeModal('modal-import')">
   <div class="modal" onclick="event.stopPropagation()" style="max-width:520px">
@@ -1808,6 +1820,6 @@
 
 <div class="toast" id="toast"></div>
 
-<script src="/js/app.js?v=81"></script>
+<script src="/js/app.js?v=82"></script>
 </body>
 </html>
