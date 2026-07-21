@@ -2014,6 +2014,16 @@ async function prepararCierre() {
   _billetesConteos.cierre = {};  // nuevo cierre: la calculadora arranca en cero
   try {
     const summary = await api('GET', '/api/registers/current/summary');
+    // No dejar cerrar hasta completar el checklist de cierre
+    const pend = summary.cierre_pendiente || [];
+    if (pend.length) {
+      const lista = pend.map(t => `• ${t}`).join('\n');
+      if (confirm(`⛔ No puedes cerrar la caja todavía.\n\nFalta el checklist de CIERRE:\n\n${lista}\n\n¿Ir al Checklist para completarlo?`)) {
+        _checklistTurno = 'cierre';
+        document.querySelector('.nav-item[data-page="checklist"]')?.click();
+      }
+      return;
+    }
     _cierreSummary = summary;
     renderCierreModal(summary);
     openModal('modal-cierre');
@@ -3929,16 +3939,27 @@ const NOV_LABELS = {
   otro:         { icon: '📋', label: 'Otro' },
 };
 
+let _reminderTimer = null;
+
 function initNovedades() {
   // Mostrar FAB siempre (ambos roles)
   const fab = document.getElementById('nov-fab');
   if (fab) fab.style.display = 'flex';
+
+  // Recordatorios automáticos del checklist (aseo 3/5 PM, cierre 6 PM) — cualquier rol
+  _checkReminders();
+  if (_reminderTimer) clearInterval(_reminderTimer);
+  _reminderTimer = setInterval(_checkReminders, 120000);  // cada 2 minutos
 
   // Para admin: chequear novedades nuevas cada 30s
   if (_userRole === 'admin') {
     checkNuevasNovedades();
     _novedadesTimer = setInterval(checkNuevasNovedades, 30000);
   }
+}
+
+async function _checkReminders() {
+  try { await api('POST', '/api/checklist/check-reminders', {}); } catch(e) {}
 }
 
 async function checkNuevasNovedades() {

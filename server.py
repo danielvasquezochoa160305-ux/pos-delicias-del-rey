@@ -325,6 +325,12 @@ def init_db():
         except Exception:
             pass
 
+        # Migración: agregar ref a novedades (para no duplicar recordatorios automáticos)
+        try:
+            conn.execute('ALTER TABLE novedades ADD COLUMN ref TEXT')
+        except Exception:
+            pass
+
         # Limpieza: el cierre de caja ya NO se registra como movimiento.
         # Quitar los movimientos de "Cierre de caja" (efectivo contado y
         # diferencias) que quedaron de versiones anteriores.
@@ -1619,6 +1625,7 @@ def current_register_summary():
             "SELECT COUNT(*) as c, COALESCE(SUM(total),0) as t FROM sales WHERE created_at >= ?",
             (opened_at,)
         ).fetchone()
+        cierre_pendiente = _cierre_pendiente(conn, datetime.now().strftime('%Y-%m-%d'))
     sbm = {r['payment_method']: {'total': r['total'], 'count': r['count']} for r in sales_by_method_rows}
     return jsonify({
         'opening_balance': reg['opening_balance'],
@@ -1628,6 +1635,7 @@ def current_register_summary():
         'manual_out': mov_out['t'],
         'total_orders': total_orders['c'],
         'total_amount': total_orders['t'],
+        'cierre_pendiente': cierre_pendiente,
     })
 
 @app.route('/api/registers/<int:rid>/close', methods=['PUT'])
@@ -1641,6 +1649,15 @@ def close_register(rid):
         reg = conn.execute('SELECT * FROM cash_registers WHERE id=?', (rid,)).fetchone()
         if not reg or reg['status'] == 'cerrada':
             return jsonify({'error': 'Caja no encontrada o ya cerrada'}), 400
+
+        # No dejar cerrar hasta completar el checklist de cierre
+        today = datetime.now().strftime('%Y-%m-%d')
+        cpend = _cierre_pendiente(conn, today)
+        if cpend:
+            return jsonify({
+                'error': 'Completa el checklist de cierre antes de cerrar la caja',
+                'checklist_pendiente': cpend
+            }), 400
 
         opened_at = reg['opened_at']
         # Calcular totales desde apertura
@@ -2402,6 +2419,79 @@ def delete_worker_document(did):
     return jsonify({'ok': True})
 
 # ─── CHECKLIST ───────────────────────────────────────
+# ─── RECORDATORIOS AUTOMÁTICOS DEL CHECKLIST ───────────
+_DIAS_SEMANA = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo']
+
+def _dia_actual():
+    return _DIAS_SEMANA[datetime.now().weekday()]
+
+def _extract_responsable(notes):
+    """Saca el nombre del responsable de las notas de apertura del turno."""
+    if not notes:
+        return ''
+    parts = [p.strip() for p in str(notes).split(' — ')]
+    return parts[1] if len(parts) > 1 else ''
+
+def _cierre_pendiente(conn, today):
+    """Lista de tareas del checklist de CIERRE que faltan hoy."""
+    items = conn.execute(
+        "SELECT id, text FROM checklist_items WHERE turno='cierre' AND active=1"
+    ).fetchall()
+    if not items:
+        return []
+    done = {r['item_id'] for r in conn.execute(
+        "SELECT item_id FROM checklist_logs WHERE date=? AND turno='cierre'", (today,)
+    ).fetchall()}
+    return [it['text'] for it in items if it['id'] not in done]
+
+@app.route('/api/checklist/check-reminders', methods=['POST'])
+def check_reminders():
+    """Genera recordatorios automáticos (novedades) si faltan tareas y ya pasó la hora.
+    Aseo: 3 PM y 5 PM. Cierre: 6 PM. Idempotente (no duplica)."""
+    now = datetime.now()
+    today = now.strftime('%Y-%m-%d')
+    hour = now.hour
+    created = []
+    with get_db() as conn:
+        reg = conn.execute(
+            "SELECT notes FROM cash_registers WHERE status='abierta' ORDER BY opened_at DESC LIMIT 1"
+        ).fetchone()
+        opener = _extract_responsable(reg['notes']) if reg else ''
+        quien = f' · {opener}' if opener else ''
+
+        def ensure(ref, desc):
+            exists = conn.execute("SELECT 1 FROM novedades WHERE ref=?", (ref,)).fetchone()
+            if not exists:
+                conn.execute(
+                    "INSERT INTO novedades (tipo, descripcion, reportado_por, ref) VALUES (?,?,?,?)",
+                    ('recordatorio', desc, 'Sistema', ref)
+                )
+                created.append(ref)
+
+        # Aseo del día (3 PM y 5 PM)
+        dia = _dia_actual()
+        aseo_items = conn.execute(
+            "SELECT id, text FROM aseo_items WHERE dia=? AND active=1", (dia,)
+        ).fetchall()
+        if aseo_items:
+            done = {r['item_id'] for r in conn.execute(
+                "SELECT item_id FROM aseo_logs WHERE date=? AND dia=?", (today, dia)
+            ).fetchall()}
+            pend = [it['text'] for it in aseo_items if it['id'] not in done]
+            if pend:
+                if hour >= 15:
+                    ensure(f'ASEO-15-{today}', f'🧹 Aseo pendiente (3:00 PM){quien}: ' + '; '.join(pend))
+                if hour >= 17:
+                    ensure(f'ASEO-17-{today}', f'🧹 Aseo pendiente (5:00 PM){quien}: ' + '; '.join(pend))
+
+        # Checklist de cierre (6 PM)
+        if hour >= 18:
+            cpend = _cierre_pendiente(conn, today)
+            if cpend:
+                ensure(f'CIERRE-18-{today}',
+                       f'📋 Checklist de cierre pendiente (6:00 PM){quien}: ' + '; '.join(cpend))
+    return jsonify({'ok': True, 'created': created})
+
 @app.route('/api/checklist', methods=['GET'])
 def get_checklist():
     turno = request.args.get('turno', 'apertura')
