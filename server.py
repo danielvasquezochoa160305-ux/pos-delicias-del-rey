@@ -778,14 +778,15 @@ def delete_product(pid):
 def get_sales():
     from_d = request.args.get('from')
     to_d = request.args.get('to')
+    refq = "COALESCE((SELECT SUM(r.total) FROM returns r WHERE r.sale_id=s.id),0) as refunded"
     with get_db() as conn:
         if from_d and to_d:
             rows = conn.execute(
-                "SELECT * FROM sales WHERE date(created_at) BETWEEN date(?) AND date(?) ORDER BY created_at DESC",
+                f"SELECT s.*, {refq} FROM sales s WHERE date(s.created_at) BETWEEN date(?) AND date(?) ORDER BY s.created_at DESC",
                 (from_d, to_d)
             ).fetchall()
         else:
-            rows = conn.execute('SELECT * FROM sales ORDER BY created_at DESC').fetchall()
+            rows = conn.execute(f'SELECT s.*, {refq} FROM sales s ORDER BY s.created_at DESC').fetchall()
     return jsonify(rows_to_list(rows))
 
 @app.route('/api/sales/<int:sid>', methods=['GET'])
@@ -1804,10 +1805,34 @@ def create_return():
             if item.get('product_id'):
                 conn.execute('UPDATE products SET stock = stock + ? WHERE id=?',
                              (item['quantity'], item['product_id']))
-        # Registrar egreso (devolución de dinero al cliente)
+            # Restar el ítem devuelto de la venta original (para que la venta refleje lo real)
+            if item.get('product_id'):
+                conn.execute(
+                    'UPDATE sale_items SET quantity = MAX(0, quantity - ?), '
+                    'subtotal = price * MAX(0, quantity - ?) WHERE sale_id=? AND product_id=?',
+                    (item['quantity'], item['quantity'], sale_id, item['product_id'])
+                )
+            else:
+                conn.execute(
+                    'UPDATE sale_items SET quantity = MAX(0, quantity - ?), '
+                    'subtotal = price * MAX(0, quantity - ?) WHERE sale_id=? AND product_name=?',
+                    (item['quantity'], item['quantity'], sale_id, item['product_name'])
+                )
+
+        # Restar de la venta original: así deja de sumar en el registro de ventas y en el cierre
         conn.execute(
-            "INSERT INTO cash_movements (type, amount, description, category) VALUES ('egreso',?,?,?)",
-            (total, f'Devolución — Venta #{sale_id}', 'Devoluciones')
+            'UPDATE sales SET total = MAX(0, total - ?), subtotal = MAX(0, subtotal - ?) WHERE id=?',
+            (total, total, sale_id)
+        )
+        # Ajustar el movimiento de ingreso de esa venta (o eliminarlo si queda en 0).
+        # La devolución YA NO crea un egreso aparte: se refleja restando la venta, para no descuadrar el cierre.
+        conn.execute(
+            "UPDATE cash_movements SET amount = MAX(0, amount - ?) WHERE type='ingreso' AND description=?",
+            (total, f'Venta #{sale_id}')
+        )
+        conn.execute(
+            "DELETE FROM cash_movements WHERE type='ingreso' AND description=? AND amount<=0",
+            (f'Venta #{sale_id}',)
         )
         row = conn.execute('SELECT * FROM returns WHERE id=?', (ret_id,)).fetchone()
     return jsonify(row_to_dict(row))

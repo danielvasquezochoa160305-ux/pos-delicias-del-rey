@@ -1092,19 +1092,27 @@ async function loadSales() {
       tbody.innerHTML = '<tr><td colspan="6" class="empty-state" style="padding:24px;text-align:center">Sin ventas en este período</td></tr>';
       return;
     }
-    tbody.innerHTML = sales.map(s => `
-      <tr>
+    tbody.innerHTML = sales.map(s => {
+      const refunded = s.refunded || 0;
+      const fullyReturned = refunded > 0 && s.total <= 0;
+      const totalCell = fullyReturned
+        ? `<span style="text-decoration:line-through;color:#94a3b8">${fmt(refunded)}</span> <span class="badge badge-danger">↩ Devuelto</span>`
+        : (refunded > 0
+            ? `<strong>${fmt(s.total)}</strong> <span class="badge badge-warning" title="Devuelto: ${fmt(refunded)}">Dev. parcial</span>`
+            : `<strong>${fmt(s.total)}</strong>`);
+      return `
+      <tr${fullyReturned ? ' style="opacity:.6"' : ''}>
         <td><strong>#${s.id}</strong></td>
         <td>${fmtDate(s.created_at)}</td>
-        <td><strong>${fmt(s.total)}</strong></td>
+        <td>${totalCell}</td>
         <td><span class="badge badge-blue">${s.payment_method}</span></td>
         <td>${s.notes || '—'}</td>
         <td style="display:flex;gap:6px">
           <button class="btn btn-outline btn-sm" onclick="viewSale(${s.id})">Ver</button>
-          <button class="btn btn-outline btn-sm" style="color:#dc2626;border-color:#dc2626" onclick="openReturnModal(${s.id})">↩ Devolver</button>
+          ${fullyReturned ? '' : `<button class="btn btn-outline btn-sm" style="color:#dc2626;border-color:#dc2626" onclick="openReturnModal(${s.id})">↩ Devolver</button>`}
         </td>
-      </tr>
-    `).join('');
+      </tr>`;
+    }).join('');
   } catch (e) { toast(e.message, 'error'); }
 }
 
