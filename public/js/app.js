@@ -2024,8 +2024,10 @@ async function prepararCierre() {
   } catch (e) { toast(e.message, 'error'); }
 }
 
+let _cierreExpected = {};  // esperado por método, para calcular la diferencia total
+
 function renderCierreModal(s) {
-  const desde = new Date(s.opened_at).toLocaleString('es-MX', { dateStyle:'short', timeStyle:'short' });
+  const desde = new Date(String(s.opened_at).replace(' ', 'T')).toLocaleString('es-MX', { dateStyle:'short', timeStyle:'short' });
   document.getElementById('cierre-turno').textContent = 'Turno desde: ' + desde;
   document.getElementById('cierre-header-totals').innerHTML =
     `${s.total_orders} pedido${s.total_orders !== 1 ? 's' : ''}: <span style="color:var(--primary)">${fmt(s.total_amount)}</span>`;
@@ -2036,43 +2038,25 @@ function renderCierreModal(s) {
   const transData = sbm['transferencia'] || { total: 0, count: 0 };
 
   const expectedEfectivo = s.opening_balance + cashData.total + s.manual_in - s.manual_out;
+  _cierreExpected = {};
 
-  // key: payment method slug, used for input/diff IDs
-  function metodoPagoSection(icon, title, expected, showCount, methodKey) {
-    const isEfectivo = methodKey === 'efectivo';
-    const inputId  = `cierre-contado-${methodKey}`;
-    const diffId   = `cierre-diff-val-${methodKey}`;
-    const pagosLabel = showCount ? `Ventas en efectivo (${showCount})` : 'Ventas en efectivo';
-    const contadorBtn = isEfectivo
-      ? `<button class="btn-contador" onclick="abrirContadorBilletes()" title="Contar billetes">🧮</button>`
-      : '';
-
+  // rows: filas informativas antes del "Contado". prefill: valor inicial del contado.
+  function seccion(icon, title, methodKey, expected, prefill, rows) {
+    _cierreExpected[methodKey] = expected;
+    const inputId = `cierre-contado-${methodKey}`;
+    const diffId  = `cierre-diff-val-${methodKey}`;
+    const contadorBtn = methodKey === 'efectivo'
+      ? `<button class="btn-contador" onclick="abrirContadorBilletes()" title="Contar billetes">🧮</button>` : '';
     return `
       <div class="cierre-metodo-section">
-        <div class="cierre-metodo-header">
-          <span>${icon} ${title}</span>
-          <strong>${fmt(expected)}</strong>
-        </div>
-        ${isEfectivo ? `
-        <div class="cierre-metodo-row">
-          <span class="cierre-metodo-label">Apertura</span>
-          <span>${fmt(s.opening_balance)}</span>
-        </div>` : ''}
-        <div class="cierre-metodo-row">
-          <span class="cierre-metodo-label">${pagosLabel}</span>
-          <span>+${fmt(isEfectivo ? cashData.total : expected)}</span>
-        </div>
-        ${isEfectivo && (s.manual_in > 0 || s.manual_out > 0) ? `
-        <div class="cierre-metodo-row">
-          <span class="cierre-metodo-label">Entrada y salida de efectivo</span>
-          <span>${s.manual_in - s.manual_out >= 0 ? '+' : ''}${fmt(s.manual_in - s.manual_out)}</span>
-        </div>` : ''}
+        <div class="cierre-metodo-header"><span>${icon} ${title}</span><strong>${fmt(expected)}</strong></div>
+        ${rows || ''}
         <div class="cierre-metodo-row contado-row">
           <span class="cierre-metodo-label">Contado</span>
           <div class="contado-input-group" style="width:260px">
-            <input type="number" id="${inputId}" class="input" placeholder="$0.00" step="0.01"
+            <input type="number" id="${inputId}" class="input" placeholder="$0.00" step="0.01" value="${prefill != null ? prefill : ''}"
               style="font-size:16px;font-weight:700;text-align:right;padding:8px 12px"
-              oninput="updateDiffLive('${methodKey}', ${expected})"/>
+              oninput="updateDiffLive('${methodKey}')"/>
             ${contadorBtn}
           </div>
         </div>
@@ -2083,41 +2067,70 @@ function renderCierreModal(s) {
       </div>`;
   }
 
-  // Solo se CUENTA el efectivo. Transferencia y tarjeta son electrónicos:
-  // se muestran como referencia (no se cuentan, no generan descuadre).
-  function _infoMetodo(icon, title, data) {
-    if (!data || !data.total) return '';
-    return `
-      <div class="cierre-info-metodo">
-        <span>${icon} ${title} <small style="color:var(--text-muted)">(${data.count} pago${data.count === 1 ? '' : 's'})</small></span>
-        <strong>${fmt(data.total)}</strong>
-      </div>`;
-  }
+  const efectivoRows = `
+    <div class="cierre-metodo-row"><span class="cierre-metodo-label">Apertura</span><span>${fmt(s.opening_balance)}</span></div>
+    <div class="cierre-metodo-row"><span class="cierre-metodo-label">Ventas en efectivo (${cashData.count})</span><span>+${fmt(cashData.total)}</span></div>
+    ${(s.manual_in > 0 || s.manual_out > 0) ? `<div class="cierre-metodo-row"><span class="cierre-metodo-label">Entrada/salida de efectivo</span><span>${s.manual_in - s.manual_out >= 0 ? '+' : ''}${fmt(s.manual_in - s.manual_out)}</span></div>` : ''}`;
 
-  document.getElementById('modal-cierre-body').innerHTML =
-    metodoPagoSection('💵', 'EFECTIVO EN CAJA', expectedEfectivo, cashData.count, 'efectivo') +
-    ((transData.total > 0 || cardData.total > 0)
-      ? `<div class="cierre-info-titulo">Pagos electrónicos (solo referencia — no se cuentan)</div>
-         ${_infoMetodo('📲', 'Transferencias', transData)}
-         ${_infoMetodo('💳', 'Tarjeta / Datáfono', cardData)}`
-      : '');
+  // Efectivo: se cuenta físicamente (empieza vacío). Transferencia/tarjeta:
+  // se pre-llenan con lo esperado (normalmente correcto), editables si hay ajuste.
+  let html = seccion('💵', 'EFECTIVO', 'efectivo', expectedEfectivo, '', efectivoRows);
+  if (transData.total > 0)
+    html += seccion('📲', 'TRANSFERENCIA', 'transferencia', transData.total, transData.total,
+      `<div class="cierre-metodo-row"><span class="cierre-metodo-label">Ventas por transferencia (${transData.count})</span><span>+${fmt(transData.total)}</span></div>`);
+  if (cardData.total > 0)
+    html += seccion('💳', 'TARJETA', 'tarjeta', cardData.total, cardData.total,
+      `<div class="cierre-metodo-row"><span class="cierre-metodo-label">Ventas por tarjeta (${cardData.count})</span><span>+${fmt(cardData.total)}</span></div>`);
+
+  const hayVarios = (transData.total > 0 || cardData.total > 0);
+  html += `
+    <div class="cierre-total-diff">
+      <span>DIFERENCIA TOTAL ${hayVarios ? '<small style="opacity:.75">(efectivo + electrónicos)</small>' : ''}</span>
+      <strong id="cierre-diff-total" class="diferencia-val">—</strong>
+    </div>`;
+
+  document.getElementById('modal-cierre-body').innerHTML = html;
+  updateCierreTotal();
 }
 
-function updateDiffLive(methodKey, expected) {
-  const inputId = `cierre-contado-${methodKey}`;
-  const diffId  = `cierre-diff-val-${methodKey}`;
-  const contado = parseFloat(document.getElementById(inputId)?.value) || 0;
+function updateDiffLive(methodKey) {
+  const expected = _cierreExpected[methodKey] || 0;
+  const contado = parseFloat(document.getElementById(`cierre-contado-${methodKey}`)?.value) || 0;
   const diff = contado - expected;
-  const el = document.getElementById(diffId);
+  const el = document.getElementById(`cierre-diff-val-${methodKey}`);
   if (el) {
     el.textContent = (diff >= 0 ? '+' : '') + fmt(diff);
     el.className = 'diferencia-val ' + (diff === 0 ? 'diff-cero' : diff > 0 ? 'diff-pos' : 'diff-neg');
   }
+  updateCierreTotal();
+}
+
+// Diferencia TOTAL = suma de las diferencias de cada método (el verde compensa el rojo)
+function updateCierreTotal() {
+  const el = document.getElementById('cierre-diff-total');
+  if (!el) return;
+  const efInp = document.getElementById('cierre-contado-efectivo');
+  // Hasta que no se cuente el efectivo, no mostramos total (evita rojo enorme inicial)
+  if (!efInp || efInp.value === '') {
+    el.textContent = '—';
+    el.className = 'diferencia-val diff-cero';
+    return;
+  }
+  let total = 0;
+  Object.keys(_cierreExpected).forEach(m => {
+    const inp = document.getElementById('cierre-contado-' + m);
+    if (!inp) return;
+    total += (parseFloat(inp.value) || 0) - (_cierreExpected[m] || 0);
+  });
+  el.textContent = (total >= 0 ? '+' : '') + fmt(total);
+  el.className = 'diferencia-val ' + (Math.abs(total) < 0.01 ? 'diff-cero' : total > 0 ? 'diff-pos' : 'diff-neg');
 }
 
 async function confirmarCierre() {
   if (!currentRegister) return;
   const counted_cash = parseFloat(document.getElementById('cierre-contado-efectivo')?.value) || 0;
+  const tInp = document.getElementById('cierre-contado-transferencia');
+  const cInp = document.getElementById('cierre-contado-tarjeta');
   const userNotes = document.getElementById('cierre-notes').value.trim();
   const activeBtn = document.querySelector('#cierre-responsable-btns .responsable-btn.active');
   const responsable = activeBtn ? activeBtn.textContent.trim() : '';
@@ -2125,8 +2138,11 @@ async function confirmarCierre() {
   const btn = document.getElementById('btn-confirmar-cierre');
   btn.disabled = true;
   btn.textContent = 'Cerrando...';
+  const payload = { counted_cash, notes };
+  if (tInp && tInp.value !== '') payload.counted_transfer = parseFloat(tInp.value) || 0;
+  if (cInp && cInp.value !== '') payload.counted_card = parseFloat(cInp.value) || 0;
   try {
-    const result = await api('PUT', `/api/registers/${currentRegister.id}/close`, { counted_cash, notes });
+    const result = await api('PUT', `/api/registers/${currentRegister.id}/close`, payload);
     closeModal('modal-cierre');
     currentRegister = null;
     renderRegisterBanner(null);

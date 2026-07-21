@@ -1634,6 +1634,8 @@ def current_register_summary():
 def close_register(rid):
     d = request.json or {}
     counted_cash = d.get('counted_cash', 0)
+    counted_transfer = d.get('counted_transfer')  # None si no se contó
+    counted_card = d.get('counted_card')
     notes = d.get('notes', '')
     with get_db() as conn:
         reg = conn.execute('SELECT * FROM cash_registers WHERE id=?', (rid,)).fetchone()
@@ -1660,7 +1662,6 @@ def close_register(rid):
         total_in = mov_in['t']
         total_out = mov_out['t']
         expected_cash = reg['opening_balance'] + total_cash_sales + total_in - total_out
-        difference = counted_cash - expected_cash
 
         # Ventas agrupadas por método de pago (con total y conteo)
         sales_by_method_rows = conn.execute(
@@ -1669,6 +1670,15 @@ def close_register(rid):
             (opened_at,)
         ).fetchall()
         sales_by_method = {r['payment_method']: {'total': r['total'], 'count': r['count']} for r in sales_by_method_rows}
+
+        # Diferencia NETA: efectivo + transferencia + tarjeta (lo verde compensa lo rojo)
+        difference = counted_cash - expected_cash
+        if counted_transfer is not None:
+            expected_transfer = sales_by_method.get('transferencia', {}).get('total', 0)
+            difference += float(counted_transfer) - expected_transfer
+        if counted_card is not None:
+            expected_card = sales_by_method.get('tarjeta', {}).get('total', 0)
+            difference += float(counted_card) - expected_card
 
         conn.execute("""
             UPDATE cash_registers SET
