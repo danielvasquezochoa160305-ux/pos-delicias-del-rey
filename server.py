@@ -792,7 +792,7 @@ def get_sales():
                 (from_d, to_d)
             ).fetchall()
         else:
-            rows = conn.execute(f'SELECT s.*, {refq} FROM sales s ORDER BY s.created_at DESC').fetchall()
+            rows = conn.execute(f'SELECT s.*, {refq} FROM sales s ORDER BY s.created_at DESC LIMIT 500').fetchall()
     return jsonify(rows_to_list(rows))
 
 @app.route('/api/sales/<int:sid>', methods=['GET'])
@@ -883,7 +883,7 @@ def get_movements():
                 (from_d, to_d)
             ).fetchall()
         else:
-            rows = conn.execute('SELECT * FROM cash_movements ORDER BY created_at DESC').fetchall()
+            rows = conn.execute('SELECT * FROM cash_movements ORDER BY created_at DESC LIMIT 500').fetchall()
     return jsonify(rows_to_list(rows))
 
 @app.route('/api/movements', methods=['POST'])
