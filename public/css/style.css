@@ -792,6 +792,30 @@ textarea.input { resize: vertical; }
   /* Avance de papel: asegura que el ticket completo salga y haya zona para cortar */
   .cmd80-feed { height: 28mm; }
   .cmd80 { page-break-inside: avoid; break-inside: avoid; }
+
+  /* ── Factura del cliente (estilo limpio, 80mm) ── */
+  .rcpt { width: 100%; color: #000; font-family: 'Helvetica Neue', Arial, sans-serif; padding: 2mm 1mm; }
+  .rcpt-brand { text-align: center; font-size: 26px; font-weight: 800; letter-spacing: 1px; line-height: 1.1; margin-top: 2mm; }
+  .rcpt-tag { text-align: center; font-size: 11px; font-weight: 700; letter-spacing: 3px; color: #333; margin: 1mm 0 3mm; }
+  .rcpt-info { text-align: center; font-size: 13px; line-height: 1.5; }
+  .rcpt-rule { border-top: 1px dashed #000; margin: 3mm 0; }
+  .rcpt-meta { display: flex; justify-content: space-between; font-size: 13px; padding: 0.6mm 0; }
+  .rcpt-meta span:first-child { color: #444; }
+  .rcpt-meta span:last-child { font-weight: 700; }
+  .rcpt-item { padding: 1.6mm 0; border-bottom: 1px dotted #bbb; }
+  .rcpt-item:last-child { border-bottom: 0; }
+  .rcpt-item-top { display: flex; justify-content: space-between; gap: 4mm; }
+  .rcpt-item-name { font-size: 15px; font-weight: 700; flex: 1; }
+  .rcpt-item-sub { font-size: 15px; font-weight: 800; white-space: nowrap; }
+  .rcpt-item-det { font-size: 12px; color: #555; margin-top: 0.4mm; }
+  .rcpt-line { display: flex; justify-content: space-between; font-size: 14px; padding: 0.8mm 0; }
+  .rcpt-total { display: flex; justify-content: space-between; align-items: center; font-size: 22px; font-weight: 900; margin: 2mm 0 1mm; }
+  .rcpt-vuelto span { font-weight: 800; font-size: 16px; }
+  .rcpt-note { font-size: 13px; text-align: center; }
+  .rcpt-foot { text-align: center; font-size: 16px; font-weight: 800; margin-top: 4mm; }
+  .rcpt-foot-sm { text-align: center; font-size: 12px; color: #333; margin-top: 1mm; }
+  .rcpt-feed { height: 30mm; }
+  .rcpt { page-break-inside: avoid; break-inside: avoid; }
 }
 
 /* ═══════════════════════════════════════════════════════

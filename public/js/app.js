@@ -1081,7 +1081,7 @@ async function confirmCobro() {
 
     // Auto-imprimir la FACTURA y abrir el cajón (diferido, sin preguntar)
     setTimeout(() => {
-      try { imprimirTicketTermico(sale, sale.items || _cartSnapshot, _consumo, _salsas, _clienteNombre, payment_method); }
+      try { imprimirTicketTermico(sale, sale.items || _cartSnapshot, _consumo, _salsas, _clienteNombre, payment_method, received, vuelto); }
       catch(e){ console.error('Factura:', e); }
     }, 250);
   } catch (e) {
@@ -1296,46 +1296,56 @@ function imprimirFactura() {
   document.getElementById('print-area').style.display = 'none';
 }
 
-function imprimirTicketTermico(sale, items, consumo, salsas, cliente, payMethod) {
-  const now = new Date(sale.created_at || Date.now());
-  const fecha = now.toLocaleDateString('es-MX', { day:'2-digit', month:'2-digit', year:'numeric' });
-  const hora  = now.toLocaleTimeString('es-MX', { hour:'2-digit', minute:'2-digit' });
+// Datos del negocio para la factura
+const NEGOCIO_DIR = 'Avenida 40 #55a-41';
+const NEGOCIO_TEL = '3197324916';
+
+function imprimirTicketTermico(sale, items, consumo, salsas, cliente, payMethod, recibido, vuelto) {
+  const now = new Date(sale.created_at ? String(sale.created_at).replace(' ', 'T') : Date.now());
+  const fecha = now.toLocaleDateString('es-CO', { day:'2-digit', month:'2-digit', year:'numeric' });
+  const hora  = now.toLocaleTimeString('es-CO', { hour:'2-digit', minute:'2-digit' });
   const negocio = settings?.negocio_nombre || 'Delicias del Rey';
-  const linea = '--------------------------------';
   const total = items.reduce((s,i) => s + i.price * i.quantity, 0);
+  const totalItems = items.reduce((s,i) => s + Number(i.quantity), 0);
+  const metodoLabel = { efectivo:'Efectivo', tarjeta:'Tarjeta', transferencia:'Transferencia' }[payMethod] || payMethod;
 
   const itemsHtml = items.map(i => `
-    <tr>
-      <td style="padding:2px 0">${i.product_name}</td>
-      <td style="text-align:right;white-space:nowrap;padding:2px 0">${i.quantity} x ${fmt(i.price)}</td>
-    </tr>
-    <tr>
-      <td colspan="2" style="text-align:right;padding:0 0 4px">${fmt(i.price * i.quantity)}</td>
-    </tr>`).join('');
+    <div class="rcpt-item">
+      <div class="rcpt-item-top">
+        <span class="rcpt-item-name">${i.product_name}</span>
+        <span class="rcpt-item-sub">${fmt(i.price * i.quantity)}</span>
+      </div>
+      <div class="rcpt-item-det">${i.quantity} x ${fmt(i.price)}</div>
+    </div>`).join('');
 
   document.getElementById('ticket-content').innerHTML = `
-    <div class="t80">
-      <div class="t80-header">
-        <div class="t80-logo">${negocio}</div>
-        <div class="t80-sub">Cafetería · Punto de Venta</div>
-        <div class="t80-sep">${linea}</div>
-        <div>Ticket #${sale.id}</div>
-        <div>${fecha} &nbsp; ${hora}</div>
-        ${cliente ? `<div>Cliente: ${cliente}</div>` : ''}
-      </div>
-      <div class="t80-sep">${linea}</div>
-      <table class="t80-items">${itemsHtml}</table>
-      <div class="t80-sep">${linea}</div>
-      <table class="t80-total">
-        <tr><td><b>TOTAL</b></td><td style="text-align:right"><b>${fmt(total)}</b></td></tr>
-        <tr><td>Pago</td><td style="text-align:right">${payMethod}</td></tr>
-      </table>
-      ${consumo || salsas ? `
-      <div class="t80-sep">${linea}</div>
-      ${consumo ? `<div>${consumo}</div>` : ''}
-      ${salsas ? `<div>Salsas: ${salsas}</div>` : ''}` : ''}
-      <div class="t80-sep">${linea}</div>
-      <div class="t80-footer">¡Gracias por su preferencia!</div>
+    <div class="rcpt">
+      <div class="rcpt-brand">${negocio}</div>
+      <div class="rcpt-tag">C A F E T E R Í A</div>
+      <div class="rcpt-info">${NEGOCIO_DIR}</div>
+      <div class="rcpt-info">Tel: ${NEGOCIO_TEL}</div>
+      <div class="rcpt-rule"></div>
+      <div class="rcpt-meta"><span>Recibo</span><span>#${sale.id}</span></div>
+      <div class="rcpt-meta"><span>Fecha</span><span>${fecha}</span></div>
+      <div class="rcpt-meta"><span>Hora</span><span>${hora}</span></div>
+      ${cliente ? `<div class="rcpt-meta"><span>Cliente</span><span>${cliente}</span></div>` : ''}
+      ${consumo ? `<div class="rcpt-meta"><span>Consumo</span><span>${consumo}</span></div>` : ''}
+      <div class="rcpt-rule"></div>
+      <div class="rcpt-items">${itemsHtml}</div>
+      <div class="rcpt-rule"></div>
+      <div class="rcpt-line"><span>Artículos</span><span>${totalItems}</span></div>
+      <div class="rcpt-line"><span>Subtotal</span><span>${fmt(total)}</span></div>
+      <div class="rcpt-total"><span>TOTAL</span><span>${fmt(total)}</span></div>
+      <div class="rcpt-rule"></div>
+      <div class="rcpt-line"><span>Forma de pago</span><span>${metodoLabel}</span></div>
+      ${recibido ? `<div class="rcpt-line"><span>Recibido</span><span>${fmt(recibido)}</span></div>` : ''}
+      ${vuelto ? `<div class="rcpt-line rcpt-vuelto"><span>Cambio</span><span>${fmt(vuelto)}</span></div>` : ''}
+      ${salsas ? `<div class="rcpt-rule"></div><div class="rcpt-note">Salsas: ${salsas}</div>` : ''}
+      <div class="rcpt-rule"></div>
+      <div class="rcpt-foot">¡Gracias por tu compra!</div>
+      <div class="rcpt-foot-sm">Te esperamos pronto ♥</div>
+      <div class="rcpt-foot-sm">${negocio}</div>
+      <div class="rcpt-feed"></div>
     </div>`;
 
   document.getElementById('print-area').style.display = 'block';
