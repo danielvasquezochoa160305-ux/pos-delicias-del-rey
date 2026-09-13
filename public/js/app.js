@@ -1079,10 +1079,12 @@ async function confirmCobro() {
     // Panel de resultado: cuánto devolver + botón imprimir comanda
     mostrarResultadoCobro(sale, vuelto, payment_method);
 
-    // Auto-imprimir la FACTURA y abrir el cajón (diferido, sin preguntar)
+    // Auto-imprimir la COMANDA (sin preguntar). Al imprimir, el driver de la
+    // impresora abre el cajón monedero. Es la ÚNICA impresión, así que el cajón
+    // se abre una sola vez al cobrar.
     setTimeout(() => {
-      try { imprimirTicketTermico(sale, sale.items || _cartSnapshot, _consumo, _salsas, _clienteNombre, payment_method, received, vuelto); }
-      catch(e){ console.error('Factura:', e); }
+      try { if (currentComandaForPrint) printComanda(); }
+      catch(e){ console.error('Comanda:', e); }
     }, 250);
   } catch (e) {
     toast(e.message, 'error');
