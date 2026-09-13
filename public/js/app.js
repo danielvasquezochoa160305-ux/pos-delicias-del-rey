@@ -1000,7 +1000,15 @@ function calcQuickAmounts(total) {
 }
 
 function setCobroAmount(amount) {
-  document.getElementById('cobro-recibido').value = amount;
+  // Suma al monto ya recibido (se pueden combinar: 5.000 + 10.000 = 15.000)
+  const inp = document.getElementById('cobro-recibido');
+  const current = parseFloat(inp.value) || 0;
+  inp.value = current + amount;
+  calcCobroChange();
+}
+
+function limpiarCobroRecibido() {
+  document.getElementById('cobro-recibido').value = '';
   calcCobroChange();
 }
 
@@ -1026,14 +1034,13 @@ async function confirmCobro() {
   const activeMethod = document.querySelector('.pay-method-btn.active');
   const payment_method = activeMethod ? activeMethod.dataset.method : 'efectivo';
   const notes = document.getElementById('cobro-notes').value;
+  const total = getCartTotal();
+  const received = parseFloat(document.getElementById('cobro-recibido').value) || 0;
 
-  if (payment_method === 'efectivo') {
-    const total = getCartTotal();
-    const received = parseFloat(document.getElementById('cobro-recibido').value) || 0;
-    if (received > 0 && received < total) {
-      toast('El monto recibido es menor al total', 'error'); return;
-    }
+  if (payment_method === 'efectivo' && received > 0 && received < total) {
+    toast('El monto recibido es menor al total', 'error'); return;
   }
+  const vuelto = (payment_method === 'efectivo' && received > 0) ? Math.max(0, received - total) : 0;
 
   try {
     const btn = document.getElementById('cobro-confirm-btn');
@@ -1050,9 +1057,8 @@ async function confirmCobro() {
     const sale = await api('POST', '/api/sales', { items: cart, payment_method, notes });
     currentSaleForPrint = sale;
     closeModal('modal-cobro');
-    toast(`Venta #${sale.id} registrada ✓`, 'success');
 
-    // Crear e IMPRIMIR la comanda de cocina automáticamente al cobrar
+    // Crear la comanda de cocina (se guarda; se imprime con el botón del panel)
     try {
       const comNotes = [_consumo, _salsas ? `Salsas: ${_salsas}` : '', notes].filter(Boolean).join(' | ');
       const comanda = await api('POST', '/api/comandas', {
@@ -1062,19 +1068,44 @@ async function confirmCobro() {
       });
       currentComandaForPrint = comanda;
       updateComandaBadge();
-      printComanda();
-    } catch (ce) { console.error('Comanda:', ce); }
+    } catch (ce) { console.error('Comanda:', ce); currentComandaForPrint = null; }
 
+    // Dejar la caja LISTA antes de imprimir
     _closeAccountAfterSale();
     clearCart();
     allProducts = await api('GET', '/api/products');
     renderProducts();
+
+    // Panel de resultado: cuánto devolver + botón imprimir comanda
+    mostrarResultadoCobro(sale, vuelto, payment_method);
+
+    // Auto-imprimir la FACTURA y abrir el cajón (diferido, sin preguntar)
+    setTimeout(() => {
+      try { imprimirTicketTermico(sale, sale.items || _cartSnapshot, _consumo, _salsas, _clienteNombre, payment_method); }
+      catch(e){ console.error('Factura:', e); }
+    }, 250);
   } catch (e) {
     toast(e.message, 'error');
     const btn = document.getElementById('cobro-confirm-btn');
     btn.disabled = false;
     btn.textContent = '✓ Confirmar cobro';
   }
+}
+
+function mostrarResultadoCobro(sale, vuelto, method) {
+  document.getElementById('cobro-result-venta').textContent = `Venta #${sale.id} registrada`;
+  const box = document.getElementById('cobro-result-devolver-box');
+  if (method === 'efectivo' && vuelto > 0) {
+    box.style.display = 'block';
+    document.getElementById('cobro-result-devolver').textContent = fmt(vuelto);
+  } else {
+    box.style.display = 'none';
+  }
+  openModal('modal-cobro-result');
+}
+
+function imprimirComandaDesdeResult() {
+  try { printComanda(); } catch(e) { console.error(e); toast('No se pudo imprimir la comanda', 'error'); }
 }
 
 // ═══════════════════════════════════════════════════════

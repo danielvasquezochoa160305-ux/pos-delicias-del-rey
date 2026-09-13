@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
   <link href="https://fonts.googleapis.com/css2?family=Pacifico&family=Barlow+Condensed:wght@400;600;700;800&display=swap" rel="stylesheet"/>
-  <link rel="stylesheet" href="/css/style.css?v=76"/>
+  <link rel="stylesheet" href="/css/style.css?v=77"/>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
 </head>
@@ -1517,15 +1517,18 @@
 
       <div id="cobro-efectivo-section">
         <div class="form-group">
-          <label>¿Con cuánto paga el cliente?</label>
-          <input type="number" id="cobro-recibido" class="input cobro-input" placeholder="$0.00"
-            oninput="calcCobroChange()" autofocus/>
+          <label>¿Con cuánto paga el cliente? <span style="font-weight:600;color:var(--text-muted);font-size:12px">(los botones se suman)</span></label>
+          <div style="display:flex;gap:8px;align-items:center">
+            <input type="number" id="cobro-recibido" class="input cobro-input" placeholder="$0.00"
+              oninput="calcCobroChange()" style="flex:1" autofocus/>
+            <button type="button" class="btn btn-outline" onclick="limpiarCobroRecibido()" style="height:56px;white-space:nowrap">Limpiar</button>
+          </div>
         </div>
+        <div class="cobro-quick-btns" id="cobro-quick-btns"></div>
         <div class="cobro-change-box" id="cobro-change-box">
           <span>Cambio</span>
           <span class="cobro-change-amount" id="cobro-change-amount">$0.00</span>
         </div>
-        <div class="cobro-quick-btns" id="cobro-quick-btns"></div>
       </div>
 
       <div class="form-group">
@@ -1538,6 +1541,24 @@
       <button class="btn btn-primary btn-lg" id="cobro-confirm-btn" onclick="confirmCobro()" style="min-width:150px">
         ✓ Confirmar cobro
       </button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL RESULTADO DEL COBRO (vuelto + comanda) ═══ -->
+<div class="modal-overlay" id="modal-cobro-result" onclick="closeModal('modal-cobro-result')">
+  <div class="modal" onclick="event.stopPropagation()" style="max-width:480px">
+    <div class="modal-body" style="text-align:center;padding:30px 26px">
+      <div style="font-size:52px;line-height:1">✅</div>
+      <div id="cobro-result-venta" style="font-size:16px;color:var(--text-muted);font-weight:700;margin-top:6px"></div>
+      <div id="cobro-result-devolver-box" style="display:none;margin:22px 0;padding:24px;background:#dcfce7;border:2px solid #86efac;border-radius:18px">
+        <div style="font-size:16px;font-weight:900;color:#15803d;text-transform:uppercase;letter-spacing:1px">💵 Devolver al cliente</div>
+        <div id="cobro-result-devolver" style="font-size:56px;font-weight:900;color:#15803d;line-height:1.05;margin-top:6px">$0</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:12px;margin-top:20px">
+        <button class="btn btn-outline btn-lg" style="font-size:17px;padding:15px" onclick="imprimirComandaDesdeResult()">🖨 Imprimir comanda</button>
+        <button class="btn btn-primary btn-lg" style="font-size:18px;padding:16px" onclick="closeModal('modal-cobro-result')">Nueva venta ✓</button>
+      </div>
     </div>
   </div>
 </div>
@@ -1820,6 +1841,6 @@
 
 <div class="toast" id="toast"></div>
 
-<script src="/js/app.js?v=83"></script>
+<script src="/js/app.js?v=84"></script>
 </body>
 </html>

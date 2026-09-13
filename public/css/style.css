@@ -893,21 +893,23 @@ textarea.input { resize: vertical; }
 .btn-contador { background: var(--warning); color: #fff; border: none; border-radius: var(--radius-sm); padding: 8px 12px; font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap; display: flex; align-items: center; gap: 5px; }
 .btn-contador:hover { background: #d97706; }
 
-.modal-cobro { max-width: 420px; }
-.cobro-total-display { background: var(--sidebar-bg); border-radius: var(--radius); padding: 22px; text-align: center; }
-.cobro-label { display: block; font-size: 11px; font-weight: 700; color: rgba(255,255,255,.5); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 6px; }
-.cobro-total { display: block; font-size: 42px; font-weight: 900; color: #fff; letter-spacing: -1px; }
-.payment-methods-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-.pay-method-btn { padding: 11px 6px; border: 1.5px solid var(--border); border-radius: var(--radius-sm); background: #fff; cursor: pointer; font-size: 13px; font-weight: 600; transition: all .15s; color: var(--text-muted); }
+.modal-cobro { max-width: 620px; }
+.modal-cobro .modal-body { max-height: 82vh; overflow-y: auto; }
+.cobro-total-display { background: var(--sidebar-bg); border-radius: var(--radius); padding: 26px; text-align: center; }
+.cobro-label { display: block; font-size: 12px; font-weight: 700; color: rgba(255,255,255,.5); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 6px; }
+.cobro-total { display: block; font-size: 52px; font-weight: 900; color: #fff; letter-spacing: -1px; }
+.payment-methods-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.pay-method-btn { padding: 16px 6px; border: 1.5px solid var(--border); border-radius: var(--radius-sm); background: #fff; cursor: pointer; font-size: 15px; font-weight: 700; transition: all .15s; color: var(--text-muted); }
 .pay-method-btn:hover { border-color: var(--primary); color: var(--primary); }
 .pay-method-btn.active { border-color: var(--primary); background: var(--primary-light); color: var(--primary); font-weight: 700; }
-.cobro-input { font-size: 22px; font-weight: 700; text-align: center; padding: 12px; }
-.cobro-change-box { display: flex; justify-content: space-between; align-items: center; background: var(--success-light); border-radius: var(--radius-sm); padding: 13px 16px; margin-top: 8px; }
-.cobro-change-box span:first-child { font-size: 13px; font-weight: 700; color: #059669; }
-.cobro-change-amount { font-size: 22px; font-weight: 900; color: #059669; }
-.cobro-quick-btns { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
-.cobro-quick-btn { flex: 1; min-width: 60px; padding: 8px; border: 1.5px solid var(--border); border-radius: var(--radius-sm); background: var(--bg); font-size: 13px; font-weight: 700; cursor: pointer; transition: all .12s; }
-.cobro-quick-btn:hover { background: var(--border); }
+.cobro-input { font-size: 28px; font-weight: 800; text-align: center; padding: 14px; height: 56px; }
+.cobro-change-box { display: flex; justify-content: space-between; align-items: center; background: var(--success-light); border-radius: var(--radius); padding: 18px 20px; margin-top: 12px; }
+.cobro-change-box span:first-child { font-size: 16px; font-weight: 800; color: #059669; }
+.cobro-change-amount { font-size: 34px; font-weight: 900; color: #059669; }
+.cobro-quick-btns { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 10px; margin-top: 12px; }
+.cobro-quick-btn { padding: 16px 8px; border: 1.5px solid var(--border); border-radius: var(--radius-sm); background: var(--bg); font-size: 17px; font-weight: 800; cursor: pointer; transition: all .12s; }
+.cobro-quick-btn:hover { background: var(--primary-light); border-color: var(--primary); color: var(--primary); }
+.cobro-quick-btn:active { transform: scale(.96); }
 
 /* ═══════════════════════════════════════════════════════
    COMANDA MODAL
