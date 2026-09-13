@@ -1300,6 +1300,19 @@ function imprimirFactura() {
 const NEGOCIO_DIR = 'Avenida 40 #55a-41';
 const NEGOCIO_TEL = '3197324916';
 
+// Abre el cajón monedero llamando al ayudante local que corre en el computador
+// de la caja (abrir-cajon.ps1). Se llama SOLO al imprimir la factura del cliente,
+// nunca en la comanda. Si el ayudante no está corriendo, no pasa nada (silencioso).
+function abrirCajonMonedero() {
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 1500);
+    fetch('http://127.0.0.1:9110/kick', { method: 'GET', mode: 'no-cors', signal: ctrl.signal })
+      .catch(() => {})
+      .finally(() => clearTimeout(t));
+  } catch (e) { /* ayudante apagado: se ignora */ }
+}
+
 function imprimirTicketTermico(sale, items, consumo, salsas, cliente, payMethod, recibido, vuelto) {
   const now = new Date(sale.created_at ? String(sale.created_at).replace(' ', 'T') : Date.now());
   const fecha = now.toLocaleDateString('es-CO', { day:'2-digit', month:'2-digit', year:'numeric' });
@@ -1349,6 +1362,7 @@ function imprimirTicketTermico(sale, items, consumo, salsas, cliente, payMethod,
     </div>`;
 
   document.getElementById('print-area').style.display = 'block';
+  abrirCajonMonedero();   // solo aquí (factura), NO en la comanda
   window.print();
   document.getElementById('print-area').style.display = 'none';
 }

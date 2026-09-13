@@ -1,0 +1,58 @@
+====================================================
+  AYUDANTE DEL CAJON MONEDERO - Delicias del Rey
+====================================================
+
+QUE HACE
+--------
+Hace que el cajon monedero se abra SOLO cuando se imprime la
+FACTURA del cliente, y NO cuando se imprime la comanda.
+
+POR QUE SE NECESITA
+-------------------
+El cajon lo abre el driver de la impresora en cada impresion.
+Como la comanda y la factura salen por la misma impresora, el
+driver no las distingue. Este ayudante toma el control: apagamos
+el auto-abrir del driver y el ayudante abre el cajon solo en la
+factura.
+
+PASOS PARA INSTALAR (una sola vez)
+----------------------------------
+1) APAGAR el auto-abrir del driver de la impresora:
+   - Panel de control > Dispositivos e impresoras
+   - Clic derecho en la impresora termica > Preferencias de impresion
+   - Busca "Peripherals", "Cash Drawer" o "Cajon"
+   - Ponlo en "Do not open" / "No abrir"
+   - Aceptar
+
+2) Copiar esta carpeta (caja-windows) al Escritorio del computador
+   de la caja.
+
+3) Doble clic en "iniciar-cajon.bat".
+   - Se abre una ventana negra que dice "Ayudante ACTIVO".
+   - Minimizala, NO la cierres. Debe quedar corriendo todo el dia.
+
+4) Haz una venta de prueba y cobra: el cajon debe abrirse con la
+   factura. Imprime una comanda: el cajon NO debe abrirse.
+
+QUE EL AYUDANTE ARRANQUE SOLO AL PRENDER EL PC (recomendado)
+------------------------------------------------------------
+   - Presiona la tecla Windows + R, escribe:  shell:startup  y Enter
+   - Se abre la carpeta de Inicio.
+   - Arrastra ahi un ACCESO DIRECTO de "iniciar-cajon.bat"
+     (clic derecho en el .bat > Enviar a > Escritorio, o
+      clic derecho > Crear acceso directo, y muevelo a esa carpeta).
+   - Listo: cada vez que prendas el PC, el ayudante arranca solo.
+
+SI EL CAJON NO ABRE
+-------------------
+   - Abre "abrir-cajon.ps1" con el Bloc de notas.
+   - Cambia la linea:   $PinCajon = 0
+     por:               $PinCajon = 1
+   - Guarda y vuelve a abrir "iniciar-cajon.bat".
+
+SI TIENES VARIAS IMPRESORAS
+---------------------------
+   - Por defecto usa la impresora PREDETERMINADA de Windows.
+   - Para forzar una, abre "abrir-cajon.ps1" y en la linea
+     $Impresora = ""   escribe el nombre exacto, por ejemplo:
+     $Impresora = "XP-80C"
