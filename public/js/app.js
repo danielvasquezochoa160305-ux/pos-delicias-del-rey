@@ -2098,34 +2098,27 @@ async function confirmarApertura() {
     toast(`Caja abierta · ${turnoLabel}`, 'success');
     renderRegisterBanner(reg);
     setPOSLock(false);
-    // Imprime un ticket de apertura con la fecha de hoy -> esto abre el cajón monedero
-    setTimeout(() => {
-      try { imprimirAperturaCaja(reg, turnoLabel, responsable); }
-      catch (e) { console.error('Apertura:', e); }
-    }, 250);
   } catch (e) { toast(e.message, 'error'); }
 }
 
-function imprimirAperturaCaja(reg, turnoLabel, responsable) {
+// Se llama con el botón "Abrir cajón para contar" del modal de apertura:
+// imprime un recibo corto para que se abra el cajón ANTES de confirmar, así
+// pueden contar el efectivo inicial y luego escribir el fondo.
+function abrirCajonParaContar() {
   const negocio = settings?.negocio_nombre || 'Delicias del Rey';
   const now = new Date();
   const fecha = now.toLocaleDateString('es-CO', { weekday:'long', day:'2-digit', month:'long', year:'numeric' });
   const hora  = now.toLocaleTimeString('es-CO', { hour:'2-digit', minute:'2-digit' });
-  const fondo = reg && reg.opening_balance ? reg.opening_balance : 0;
-  const turno = (turnoLabel || '').replace(/[☀️🌙]/g, '').trim();
   document.getElementById('ticket-content').innerHTML = `
     <div class="rcpt">
       <div class="rcpt-brand">${negocio}</div>
       <div class="rcpt-tag">A P E R T U R A   D E   C A J A</div>
+      <div class="rcpt-info">Cuente el efectivo inicial</div>
       <div class="rcpt-rule"></div>
       <div class="rcpt-meta"><span>Fecha</span><span>${fecha}</span></div>
       <div class="rcpt-meta"><span>Hora</span><span>${hora}</span></div>
-      ${turno ? `<div class="rcpt-meta"><span>Turno</span><span>${turno}</span></div>` : ''}
-      ${responsable ? `<div class="rcpt-meta"><span>Responsable</span><span>${responsable}</span></div>` : ''}
       <div class="rcpt-rule"></div>
-      <div class="rcpt-line"><span>Fondo inicial</span><span>${fmt(fondo)}</span></div>
-      <div class="rcpt-rule"></div>
-      <div class="rcpt-foot">¡Buen turno! 💪</div>
+      <div class="rcpt-foot-sm">Cuente el dinero y escriba el fondo</div>
       <div class="rcpt-feed"></div>
     </div>`;
   document.getElementById('print-area').style.display = 'block';
