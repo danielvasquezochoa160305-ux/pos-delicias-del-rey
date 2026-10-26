@@ -2159,7 +2159,48 @@ async function prepararCierre() {
       const inp = document.getElementById('cierre-contado-efectivo');
       if (inp) inp.focus();
     }, 120);
+    // Imprime cuánto debería haber -> abre el cajón para poder contar
+    setTimeout(() => {
+      try { imprimirEsperadoCierre(summary); }
+      catch (e) { console.error('Cierre esperado:', e); }
+    }, 350);
   } catch (e) { toast(e.message, 'error'); }
+}
+
+function imprimirEsperadoCierre(s) {
+  const negocio = settings?.negocio_nombre || 'Delicias del Rey';
+  const now = new Date();
+  const fecha = now.toLocaleDateString('es-CO', { day:'2-digit', month:'2-digit', year:'numeric' });
+  const hora  = now.toLocaleTimeString('es-CO', { hour:'2-digit', minute:'2-digit' });
+  const sbm = s.sales_by_method || {};
+  const cash  = (sbm['efectivo']      || { total: 0 }).total;
+  const card  = (sbm['tarjeta']       || { total: 0 }).total;
+  const trans = (sbm['transferencia'] || { total: 0 }).total;
+  const esperadoEfectivo = s.opening_balance + cash + s.manual_in - s.manual_out;
+  document.getElementById('ticket-content').innerHTML = `
+    <div class="rcpt">
+      <div class="rcpt-brand">${negocio}</div>
+      <div class="rcpt-tag">C I E R R E   D E   C A J A</div>
+      <div class="rcpt-info">Dinero que debería haber</div>
+      <div class="rcpt-rule"></div>
+      <div class="rcpt-meta"><span>Fecha</span><span>${fecha}</span></div>
+      <div class="rcpt-meta"><span>Hora</span><span>${hora}</span></div>
+      <div class="rcpt-rule"></div>
+      <div class="rcpt-line"><span>Fondo de apertura</span><span>${fmt(s.opening_balance)}</span></div>
+      <div class="rcpt-line"><span>Ventas en efectivo</span><span>+${fmt(cash)}</span></div>
+      ${s.manual_in  > 0 ? `<div class="rcpt-line"><span>Entradas de efectivo</span><span>+${fmt(s.manual_in)}</span></div>` : ''}
+      ${s.manual_out > 0 ? `<div class="rcpt-line"><span>Salidas (egresos)</span><span>-${fmt(s.manual_out)}</span></div>` : ''}
+      <div class="rcpt-rule"></div>
+      <div class="rcpt-total"><span>EFECTIVO ESPERADO</span><span>${fmt(esperadoEfectivo)}</span></div>
+      ${trans > 0 ? `<div class="rcpt-rule"></div><div class="rcpt-line"><span>Transferencias</span><span>${fmt(trans)}</span></div>` : ''}
+      ${card  > 0 ? `<div class="rcpt-line"><span>Tarjeta</span><span>${fmt(card)}</span></div>` : ''}
+      <div class="rcpt-rule"></div>
+      <div class="rcpt-foot-sm">Cuenta el efectivo y compáralo</div>
+      <div class="rcpt-feed"></div>
+    </div>`;
+  document.getElementById('print-area').style.display = 'block';
+  window.print();
+  document.getElementById('print-area').style.display = 'none';
 }
 
 let _cierreExpected = {};  // esperado por método, para calcular la diferencia total
