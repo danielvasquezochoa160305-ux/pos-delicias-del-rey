@@ -1526,7 +1526,44 @@ async function saveMovement() {
     closeModal('modal-movement');
     toast('Movimiento registrado', 'success');
     loadMovements();
+    // En un EGRESO, imprime un comprobante con el motivo y el monto -> abre el cajón
+    if (type === 'egreso') {
+      setTimeout(() => {
+        try { imprimirEgreso(amount, description, category); }
+        catch (e) { console.error('Egreso:', e); }
+      }, 250);
+    }
   } catch (e) { toast(e.message, 'error'); }
+}
+
+function imprimirEgreso(amount, description, category) {
+  const negocio = settings?.negocio_nombre || 'Delicias del Rey';
+  const now = new Date();
+  const fecha = now.toLocaleDateString('es-CO', { day:'2-digit', month:'2-digit', year:'numeric' });
+  const hora  = now.toLocaleTimeString('es-CO', { hour:'2-digit', minute:'2-digit' });
+  document.getElementById('ticket-content').innerHTML = `
+    <div class="rcpt">
+      <div class="rcpt-brand">${negocio}</div>
+      <div class="rcpt-tag">C O M P R O B A N T E   D E   E G R E S O</div>
+      <div class="rcpt-rule"></div>
+      <div class="rcpt-meta"><span>Fecha</span><span>${fecha}</span></div>
+      <div class="rcpt-meta"><span>Hora</span><span>${hora}</span></div>
+      ${category ? `<div class="rcpt-meta"><span>Categoría</span><span>${category}</span></div>` : ''}
+      <div class="rcpt-rule"></div>
+      <div class="rcpt-item">
+        <div class="rcpt-item-top"><span class="rcpt-item-name">Motivo del egreso</span></div>
+        <div class="rcpt-item-det">${description}</div>
+      </div>
+      <div class="rcpt-rule"></div>
+      <div class="rcpt-total"><span>EGRESO</span><span>- ${fmt(amount)}</span></div>
+      <div class="rcpt-rule"></div>
+      <div class="rcpt-line"><span>Entregó</span><span>______________</span></div>
+      <div class="rcpt-line"><span>Autorizó</span><span>______________</span></div>
+      <div class="rcpt-feed"></div>
+    </div>`;
+  document.getElementById('print-area').style.display = 'block';
+  window.print();
+  document.getElementById('print-area').style.display = 'none';
 }
 
 async function deleteMovement(id) {
