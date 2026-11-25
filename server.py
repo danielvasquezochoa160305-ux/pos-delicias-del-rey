@@ -1556,6 +1556,142 @@ def report_monthly():
                      mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
 
+@app.route('/api/reports/completo', methods=['GET'])
+def report_completo():
+    # Reporte: ventas por día (con gráfico de barras), por semana, productos
+    # más vendidos e histórico de ventas del mes.
+    import calendar
+    from openpyxl.chart import BarChart, Reference
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    month = request.args.get('month', datetime.now().strftime('%Y-%m'))
+    year, mon = int(month.split('-')[0]), int(month.split('-')[1])
+    last_day = calendar.monthrange(year, mon)[1]
+    d_ini = f'{month}-01'; d_fin = f'{month}-{last_day:02d}'
+    month_label = datetime(year, mon, 1).strftime('%B %Y').capitalize()
+
+    AZUL = '1E3A8A'; GRIS = 'F1F5F9'
+    WHITE = Font(color='FFFFFF', bold=True, size=11); BOLD = Font(bold=True)
+    CEN = Alignment(horizontal='center', vertical='center'); RIG = Alignment(horizontal='right')
+    PESOS = '$#,##0'; thin = Side(style='thin', color='CBD5E1')
+    BRD = Border(left=thin, right=thin, top=thin, bottom=thin)
+
+    def head(ws, row, cols):
+        for i, t in enumerate(cols, 1):
+            cl = ws.cell(row, i, t); cl.font = WHITE; cl.alignment = CEN
+            cl.fill = PatternFill('solid', fgColor=AZUL); cl.border = BRD
+
+    def titulo(ws, text):
+        ws['A1'] = text; ws['A1'].font = Font(bold=True, size=15, color=AZUL)
+
+    wb = openpyxl.Workbook()
+
+    with get_db() as conn:
+        dias = {r['d']: (r['ped'], r['tot']) for r in conn.execute(
+            "SELECT CAST(strftime('%d',created_at) AS INT) d, COUNT(*) ped, COALESCE(SUM(total),0) tot "
+            "FROM sales WHERE date(created_at) BETWEEN ? AND ? GROUP BY d", (d_ini, d_fin))}
+        prods = conn.execute(
+            "SELECT si.product_name nombre, SUM(si.quantity) qty, SUM(si.subtotal) tot "
+            "FROM sale_items si JOIN sales s ON s.id=si.sale_id "
+            "WHERE date(s.created_at) BETWEEN ? AND ? GROUP BY si.product_name ORDER BY qty DESC",
+            (d_ini, d_fin)).fetchall()
+        ventas = conn.execute(
+            "SELECT id, date(created_at) f, strftime('%H:%M',created_at) h, payment_method m, total t "
+            "FROM sales WHERE date(created_at) BETWEEN ? AND ? ORDER BY created_at DESC",
+            (d_ini, d_fin)).fetchall()
+        semanas_data = []
+        for nombre, ini, fin in [('Semana 1', 1, 7), ('Semana 2', 8, 14), ('Semana 3', 15, 21),
+                                 ('Semana 4', 22, 28), ('Semana 5', 29, last_day)]:
+            if ini > last_day:
+                continue
+            row = conn.execute(
+                "SELECT COUNT(*) ped, COALESCE(SUM(total),0) tot FROM sales "
+                "WHERE date(created_at) BETWEEN ? AND ? AND CAST(strftime('%d',created_at) AS INT) BETWEEN ? AND ?",
+                (d_ini, d_fin, ini, fin)).fetchone()
+            semanas_data.append((nombre, ini, min(fin, last_day), row['ped'], row['tot']))
+
+    # Hoja 1 — Ventas por día + gráfico
+    ws1 = wb.active; ws1.title = 'Ventas por día'
+    titulo(ws1, f'Ventas por día — {month_label}')
+    head(ws1, 3, ['Día', 'Pedidos', 'Ventas ($)'])
+    r = 4
+    for d in range(1, last_day + 1):
+        ped, tot = dias.get(d, (0, 0))
+        ws1.cell(r, 1, d).alignment = CEN; ws1.cell(r, 2, ped).alignment = CEN
+        cl = ws1.cell(r, 3, tot); cl.number_format = PESOS
+        for cc in range(1, 4): ws1.cell(r, cc).border = BRD
+        r += 1
+    tr = r
+    ws1.cell(r, 1, 'TOTAL').font = BOLD
+    ws1.cell(r, 2, f'=SUM(B4:B{r-1})').font = BOLD; ws1.cell(r, 2).alignment = CEN
+    cl = ws1.cell(r, 3, f'=SUM(C4:C{r-1})'); cl.font = BOLD; cl.number_format = PESOS
+    for cc in range(1, 4):
+        ws1.cell(tr, cc).fill = PatternFill('solid', fgColor=GRIS); ws1.cell(tr, cc).border = BRD
+    ws1.column_dimensions['A'].width = 8; ws1.column_dimensions['B'].width = 12; ws1.column_dimensions['C'].width = 16
+    ch = BarChart(); ch.type = 'col'; ch.title = f'Ventas por día — {month_label}'
+    ch.y_axis.title = 'Ventas ($)'; ch.x_axis.title = 'Día'; ch.height = 9; ch.width = 26; ch.legend = None
+    ch.add_data(Reference(ws1, min_col=3, min_row=3, max_row=tr - 1), titles_from_data=True)
+    ch.set_categories(Reference(ws1, min_col=1, min_row=4, max_row=tr - 1))
+    ws1.add_chart(ch, 'E3')
+
+    # Hoja 2 — Ventas por semana
+    ws2 = wb.create_sheet('Ventas por semana')
+    titulo(ws2, f'Ventas por semana — {month_label}')
+    head(ws2, 3, ['Semana', 'Rango de días', 'Pedidos', 'Ventas ($)'])
+    r = 4
+    for nombre, ini, fin, ped, tot in semanas_data:
+        ws2.cell(r, 1, nombre).font = BOLD
+        ws2.cell(r, 2, f'{ini} al {fin}').alignment = CEN
+        ws2.cell(r, 3, ped).alignment = CEN
+        cl = ws2.cell(r, 4, tot); cl.number_format = PESOS
+        for cc in range(1, 5): ws2.cell(r, cc).border = BRD
+        r += 1
+    ws2.cell(r, 1, 'TOTAL').font = BOLD
+    ws2.cell(r, 3, f'=SUM(C4:C{r-1})').font = BOLD; ws2.cell(r, 3).alignment = CEN
+    cl = ws2.cell(r, 4, f'=SUM(D4:D{r-1})'); cl.font = BOLD; cl.number_format = PESOS
+    for cc in range(1, 5):
+        ws2.cell(r, cc).fill = PatternFill('solid', fgColor=GRIS); ws2.cell(r, cc).border = BRD
+    for col, w in zip('ABCD', (12, 18, 12, 16)): ws2.column_dimensions[col].width = w
+    ch2 = BarChart(); ch2.type = 'col'; ch2.title = 'Ventas por semana'; ch2.height = 8; ch2.width = 16; ch2.legend = None
+    ch2.add_data(Reference(ws2, min_col=4, min_row=3, max_row=r - 1), titles_from_data=True)
+    ch2.set_categories(Reference(ws2, min_col=1, min_row=4, max_row=r - 1))
+    ws2.add_chart(ch2, 'F3')
+
+    # Hoja 3 — Productos más vendidos
+    ws3 = wb.create_sheet('Productos más vendidos')
+    titulo(ws3, f'Productos más vendidos — {month_label}')
+    head(ws3, 3, ['#', 'Producto', 'Cantidad', 'Total vendido ($)'])
+    r = 4
+    for i, p in enumerate(prods, 1):
+        ws3.cell(r, 1, i).alignment = CEN; ws3.cell(r, 2, p['nombre'])
+        ws3.cell(r, 3, int(p['qty'] or 0)).alignment = CEN
+        cl = ws3.cell(r, 4, p['tot'] or 0); cl.number_format = PESOS
+        for cc in range(1, 5): ws3.cell(r, cc).border = BRD
+        r += 1
+    if not prods: ws3.cell(4, 2, 'Sin ventas en el mes')
+    for col, w in zip('ABCD', (6, 34, 12, 18)): ws3.column_dimensions[col].width = w
+
+    # Hoja 4 — Histórico de ventas
+    ws4 = wb.create_sheet('Histórico de ventas')
+    titulo(ws4, f'Histórico de ventas — {month_label}')
+    head(ws4, 3, ['Venta #', 'Fecha', 'Hora', 'Método de pago', 'Total ($)'])
+    r = 4
+    for v in ventas:
+        ws4.cell(r, 1, v['id']).alignment = CEN
+        ws4.cell(r, 2, v['f']).alignment = CEN
+        ws4.cell(r, 3, v['h']).alignment = CEN
+        ws4.cell(r, 4, (v['m'] or '').capitalize()).alignment = CEN
+        cl = ws4.cell(r, 5, v['t'] or 0); cl.number_format = PESOS
+        r += 1
+    ws4.cell(r, 4, 'TOTAL').font = BOLD; ws4.cell(r, 4).alignment = RIG
+    cl = ws4.cell(r, 5, f'=SUM(E4:E{r-1})'); cl.font = BOLD; cl.number_format = PESOS
+    for col, w in zip('ABCDE', (10, 13, 9, 16, 16)): ws4.column_dimensions[col].width = w
+    ws4.freeze_panes = 'A4'
+
+    buf = io.BytesIO(); wb.save(buf); buf.seek(0)
+    return send_file(buf, as_attachment=True, download_name=f'reporte_completo_{month}.xlsx',
+                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+
 # ─── CIERRES DE CAJA ─────────────────────────────────
 @app.route('/api/registers', methods=['GET'])
 def get_registers():

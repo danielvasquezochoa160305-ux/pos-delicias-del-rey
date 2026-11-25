@@ -437,6 +437,11 @@ async function downloadReport(type) {
     if (!date) { toast('Selecciona una fecha de la semana', 'error'); return; }
     url = `/api/reports/weekly?date=${date}`;
     filename = `informe_semanal_${date}.xlsx`;
+  } else if (type === 'completo') {
+    const month = document.getElementById('report-completo-month')?.value;
+    if (!month) { toast('Selecciona un mes', 'error'); return; }
+    url = `/api/reports/completo?month=${month}`;
+    filename = `reporte_completo_${month}.xlsx`;
   } else {
     const month = document.getElementById('report-monthly-month')?.value;
     if (!month) { toast('Selecciona un mes', 'error'); return; }

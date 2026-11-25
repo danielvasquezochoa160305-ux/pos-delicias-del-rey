@@ -507,6 +507,19 @@
           </div>
         </div>
 
+        <!-- Reporte completo (gráfico + semanas + productos + histórico) -->
+        <div class="report-item">
+          <div class="report-item-icon">📈</div>
+          <div class="report-item-body">
+            <div class="report-item-title">Reporte completo</div>
+            <div class="report-item-desc">Gráfico de barras por día, ventas por semana, productos más vendidos e histórico de ventas del mes</div>
+            <div class="report-item-controls">
+              <input type="month" id="report-completo-month" class="input" style="flex:1;max-width:180px"/>
+              <button class="btn btn-primary" onclick="downloadReport('completo')">⬇ Descargar</button>
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
 
@@ -1845,6 +1858,6 @@
 
 <div class="toast" id="toast"></div>
 
-<script src="/js/app.js?v=91"></script>
+<script src="/js/app.js?v=92"></script>
 </body>
 </html>
