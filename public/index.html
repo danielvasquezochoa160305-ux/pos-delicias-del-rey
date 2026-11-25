@@ -507,6 +507,19 @@
           </div>
         </div>
 
+        <!-- Por hora de un día -->
+        <div class="report-item">
+          <div class="report-item-icon">🕐</div>
+          <div class="report-item-body">
+            <div class="report-item-title">Ventas por hora (de un día)</div>
+            <div class="report-item-desc">Nivel de ventas por hora de un día específico: tickets e ingresos por hora, con gráfico y hora pico</div>
+            <div class="report-item-controls">
+              <input type="date" id="report-porhora-date" class="input" style="flex:1;max-width:180px"/>
+              <button class="btn btn-primary" onclick="downloadReport('porhora')">⬇ Descargar</button>
+            </div>
+          </div>
+        </div>
+
         <!-- Reporte completo (gráfico + semanas + productos + histórico) -->
         <div class="report-item">
           <div class="report-item-icon">📈</div>
@@ -1880,6 +1893,6 @@
 
 <div class="toast" id="toast"></div>
 
-<script src="/js/app.js?v=93"></script>
+<script src="/js/app.js?v=94"></script>
 </body>
 </html>

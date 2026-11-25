@@ -1739,6 +1739,82 @@ def ventas_por_dia():
     return jsonify({'month': month, 'dias': dias})
 
 
+@app.route('/api/reports/por-hora', methods=['GET'])
+def report_por_hora():
+    # Informe del nivel de ventas por hora de UN día (tickets + ingresos) con gráfico.
+    from openpyxl.chart import BarChart, LineChart, Reference
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    fecha = request.args.get('date', datetime.now().strftime('%Y-%m-%d'))
+    try:
+        d = datetime.strptime(fecha, '%Y-%m-%d')
+        fecha_label = d.strftime('%d/%m/%Y')
+    except ValueError:
+        return jsonify({'error': 'Fecha inválida'}), 400
+
+    AZUL = '1E3A8A'; GRIS = 'F1F5F9'
+    WHITE = Font(color='FFFFFF', bold=True, size=11); BOLD = Font(bold=True)
+    CEN = Alignment(horizontal='center', vertical='center')
+    PESOS = '$#,##0'; thin = Side(style='thin', color='CBD5E1')
+    BRD = Border(left=thin, right=thin, top=thin, bottom=thin)
+
+    with get_db() as conn:
+        hmap = {r['h']: (r['tk'], r['tot']) for r in conn.execute(
+            "SELECT CAST(strftime('%H',created_at) AS INT) h, COUNT(*) tk, COALESCE(SUM(total),0) tot "
+            "FROM sales WHERE date(created_at)=? GROUP BY h", (fecha,))}
+
+    activas = [h for h in hmap if hmap[h][0] > 0]
+    if activas:
+        h_ini = max(0, min(activas) - 1); h_fin = min(23, max(activas) + 1)
+    else:
+        h_ini, h_fin = 6, 20
+
+    wb = openpyxl.Workbook()
+    ws = wb.active; ws.title = 'Ventas por hora'
+    ws['A1'] = f'Nivel de ventas por hora — {fecha_label}'
+    ws['A1'].font = Font(bold=True, size=15, color=AZUL)
+    for i, t in enumerate(['Hora', 'Tickets', 'Ingresos ($)'], 1):
+        cl = ws.cell(3, i, t); cl.font = WHITE; cl.alignment = CEN
+        cl.fill = PatternFill('solid', fgColor=AZUL); cl.border = BRD
+    r = 4
+    for h in range(h_ini, h_fin + 1):
+        tk, tot = hmap.get(h, (0, 0))
+        ws.cell(r, 1, f'{h:02d}:00').alignment = CEN
+        ws.cell(r, 2, tk).alignment = CEN
+        cl = ws.cell(r, 3, tot); cl.number_format = PESOS
+        for cc in range(1, 4): ws.cell(r, cc).border = BRD
+        r += 1
+    tr = r
+    ws.cell(r, 1, 'TOTAL').font = BOLD
+    ws.cell(r, 2, f'=SUM(B4:B{r-1})').font = BOLD; ws.cell(r, 2).alignment = CEN
+    cl = ws.cell(r, 3, f'=SUM(C4:C{r-1})'); cl.font = BOLD; cl.number_format = PESOS
+    for cc in range(1, 4):
+        ws.cell(tr, cc).fill = PatternFill('solid', fgColor=GRIS); ws.cell(tr, cc).border = BRD
+    for col, w in zip('ABC', (10, 12, 16)): ws.column_dimensions[col].width = w
+
+    # Hora pico
+    if activas:
+        pico_h = max(activas, key=lambda h: hmap[h][0])
+        ws.cell(2, 1, f'🔥 Hora pico: {pico_h:02d}:00 ({hmap[pico_h][0]} tickets)').font = Font(bold=True, color='FC4C02')
+
+    bar = BarChart(); bar.type = 'col'; bar.title = f'Nivel de ventas por hora — {fecha_label}'
+    bar.y_axis.title = 'Ingresos ($)'; bar.x_axis.title = 'Hora'; bar.height = 10; bar.width = 28
+    bar.add_data(Reference(ws, min_col=3, min_row=3, max_row=tr - 1), titles_from_data=True)
+    bar.set_categories(Reference(ws, min_col=1, min_row=4, max_row=tr - 1))
+    linea = LineChart()
+    linea.add_data(Reference(ws, min_col=2, min_row=3, max_row=tr - 1), titles_from_data=True)
+    linea.set_categories(Reference(ws, min_col=1, min_row=4, max_row=tr - 1))
+    linea.y_axis.axId = 200; linea.y_axis.title = 'Tickets'
+    linea.series[0].graphicalProperties.line.solidFill = 'FC4C02'
+    linea.series[0].graphicalProperties.line.width = 28000
+    bar.y_axis.crosses = 'autoZero'; linea.y_axis.crosses = 'max'
+    bar += linea
+    ws.add_chart(bar, 'E3')
+
+    buf = io.BytesIO(); wb.save(buf); buf.seek(0)
+    return send_file(buf, as_attachment=True, download_name=f'ventas_por_hora_{fecha}.xlsx',
+                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+
 # ─── CIERRES DE CAJA ─────────────────────────────────
 @app.route('/api/registers', methods=['GET'])
 def get_registers():

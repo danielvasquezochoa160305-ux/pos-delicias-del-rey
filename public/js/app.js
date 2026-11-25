@@ -440,6 +440,11 @@ async function downloadReport(type) {
     if (!date) { toast('Selecciona una fecha de la semana', 'error'); return; }
     url = `/api/reports/weekly?date=${date}`;
     filename = `informe_semanal_${date}.xlsx`;
+  } else if (type === 'porhora') {
+    const date = document.getElementById('report-porhora-date')?.value;
+    if (!date) { toast('Selecciona un día', 'error'); return; }
+    url = `/api/reports/por-hora?date=${date}`;
+    filename = `ventas_por_hora_${date}.xlsx`;
   } else if (type === 'completo') {
     const month = document.getElementById('report-completo-month')?.value;
     if (!month) { toast('Selecciona un mes', 'error'); return; }
