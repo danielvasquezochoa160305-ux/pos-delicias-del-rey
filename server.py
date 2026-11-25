@@ -1692,6 +1692,22 @@ def report_completo():
                      mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
 
+@app.route('/api/ventas-por-dia', methods=['GET'])
+def ventas_por_dia():
+    import calendar
+    month = request.args.get('month', datetime.now().strftime('%Y-%m'))
+    year, mon = int(month.split('-')[0]), int(month.split('-')[1])
+    last_day = calendar.monthrange(year, mon)[1]
+    d_ini = f'{month}-01'; d_fin = f'{month}-{last_day:02d}'
+    with get_db() as conn:
+        rows = {r['d']: (r['ped'], r['tot']) for r in conn.execute(
+            "SELECT CAST(strftime('%d',created_at) AS INT) d, COUNT(*) ped, COALESCE(SUM(total),0) tot "
+            "FROM sales WHERE date(created_at) BETWEEN ? AND ? GROUP BY d", (d_ini, d_fin))}
+    dias = [{'dia': d, 'ventas': rows.get(d, (0, 0))[0], 'total': rows.get(d, (0, 0))[1]}
+            for d in range(1, last_day + 1)]
+    return jsonify({'month': month, 'dias': dias})
+
+
 # ─── CIERRES DE CAJA ─────────────────────────────────
 @app.route('/api/registers', methods=['GET'])
 def get_registers():

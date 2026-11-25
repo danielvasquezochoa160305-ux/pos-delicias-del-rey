@@ -544,6 +544,28 @@
       </div>
     </div>
 
+    <!-- Gráfico ventas por día del mes -->
+    <div class="card" style="margin-bottom:20px">
+      <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+        <span>📅 Nivel de ventas por día del mes</span>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <div class="dash-hora-legend">
+            <span class="dash-hora-dot ventas"></span> Tickets
+            <span class="dash-hora-dot total" style="margin-left:10px"></span> Ingresos
+          </div>
+          <span id="dash-dia-pico" class="dash-hora-pico-badge" style="display:none"></span>
+          <input type="month" id="chart-dia-month" class="input" style="max-width:160px;height:36px" onchange="loadDailyMonthChart()"/>
+        </div>
+      </div>
+      <div style="position:relative;height:240px">
+        <canvas id="chart-ventas-dia"></canvas>
+        <div id="chart-dia-empty" style="display:none;position:absolute;inset:0;flex-direction:column;align-items:center;justify-content:center;color:var(--text-muted)">
+          <span style="font-size:32px">📊</span>
+          <span style="font-size:13px;margin-top:6px">Sin ventas en el mes seleccionado</span>
+        </div>
+      </div>
+    </div>
+
     <div class="dash-grid">
       <div class="card">
         <div class="card-title">Top productos (7 días)</div>
@@ -1858,6 +1880,6 @@
 
 <div class="toast" id="toast"></div>
 
-<script src="/js/app.js?v=92"></script>
+<script src="/js/app.js?v=93"></script>
 </body>
 </html>

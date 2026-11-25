@@ -346,6 +346,9 @@ async function loadDashboard(silent = false) {
     // Gráfico ventas por hora
     renderHourlyChart(d.ventasPorHora || []);
 
+    // Gráfico ventas por día del mes (solo la primera vez; el refresco en vivo no lo repite)
+    if (!_diaChart) loadDailyMonthChart();
+
     // Ventas por turno
     renderTurnos(d.turnos || []);
 
@@ -596,6 +599,104 @@ function renderHourlyChart(data) {
           },
           grid: { display: false }
         }
+      }
+    }
+  });
+}
+
+// ─── Gráfico de ventas por día del mes ────────────────
+let _diaChart = null;
+
+async function loadDailyMonthChart() {
+  const monthEl = document.getElementById('chart-dia-month');
+  if (!monthEl) return;
+  if (!monthEl.value) {
+    const n = new Date();
+    monthEl.value = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}`;
+  }
+  try {
+    const res = await api('GET', `/api/ventas-por-dia?month=${monthEl.value}`);
+    renderDailyMonthChart(res.dias || []);
+  } catch (e) { console.error('ventas por día:', e); }
+}
+
+function renderDailyMonthChart(data) {
+  const canvas = document.getElementById('chart-ventas-dia');
+  if (!canvas) return;
+  const emptyEl = document.getElementById('chart-dia-empty');
+  const picoBadge = document.getElementById('dash-dia-pico');
+
+  const hayDatos = data.some(d => d.ventas > 0);
+  if (!hayDatos) {
+    if (emptyEl) emptyEl.style.display = 'flex';
+    canvas.style.display = 'none';
+    if (picoBadge) picoBadge.style.display = 'none';
+    if (_diaChart) { _diaChart.destroy(); _diaChart = null; }
+    return;
+  }
+  if (emptyEl) emptyEl.style.display = 'none';
+  canvas.style.display = '';
+
+  const labels  = data.map(d => d.dia);
+  const ventas  = data.map(d => d.ventas);
+  const totales = data.map(d => d.total);
+
+  // Día pico (más tickets)
+  const pico = data.reduce((a, b) => b.ventas > a.ventas ? b : a, data[0]);
+  if (pico.ventas > 0 && picoBadge) {
+    picoBadge.textContent = `🔥 Mejor día: ${pico.dia} (${pico.ventas} tickets)`;
+    picoBadge.style.display = '';
+  }
+
+  if (_diaChart) {
+    _diaChart.data.labels = labels;
+    _diaChart.data.datasets[0].data = totales;
+    _diaChart.data.datasets[1].data = ventas;
+    _diaChart.update('none');
+    return;
+  }
+
+  const ctx = canvas.getContext('2d');
+  const grad = ctx.createLinearGradient(0, 0, 0, 240);
+  grad.addColorStop(0, 'rgba(99,102,241,0.85)');
+  grad.addColorStop(1, 'rgba(99,102,241,0.15)');
+
+  _diaChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Ingresos ($)', data: totales, backgroundColor: grad, borderColor: '#6366f1',
+          borderWidth: 1.5, borderRadius: 5, yAxisID: 'yTotal', order: 2 },
+        { label: 'Tickets vendidos', data: ventas, type: 'line', borderColor: '#FC4C02',
+          backgroundColor: 'rgba(252,76,2,0.12)', borderWidth: 2.5, pointBackgroundColor: '#FC4C02',
+          pointRadius: 3, pointHoverRadius: 6, tension: 0.4, fill: true, yAxisID: 'yVentas', order: 1 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#1e293b', titleColor: '#f8fafc', bodyColor: '#cbd5e1',
+          padding: 12, cornerRadius: 10,
+          callbacks: {
+            title: items => `Día ${items[0].label}`,
+            label: ctx => ctx.dataset.label === 'Tickets vendidos'
+              ? ` ${ctx.raw} ticket${ctx.raw !== 1 ? 's' : ''}`
+              : ` $${Number(ctx.raw).toLocaleString('es-CO')}`
+          }
+        }
+      },
+      scales: {
+        x: { grid: { display: false }, ticks: { color: '#94a3b8', font: { size: 10 } } },
+        yVentas: { type: 'linear', position: 'left', beginAtZero: true,
+          ticks: { color: '#FC4C02', font: { size: 11 }, stepSize: 1, callback: v => v % 1 === 0 ? v : '' },
+          grid: { color: 'rgba(0,0,0,0.05)' } },
+        yTotal: { type: 'linear', position: 'right', beginAtZero: true,
+          ticks: { color: '#6366f1', font: { size: 11 }, callback: v => v >= 1000 ? `$${(v/1000).toFixed(0)}k` : `$${v}` },
+          grid: { display: false } }
       }
     }
   });
