@@ -1561,7 +1561,7 @@ def report_completo():
     # Reporte: ventas por día (con gráfico de barras), por semana, productos
     # más vendidos e histórico de ventas del mes.
     import calendar
-    from openpyxl.chart import BarChart, Reference
+    from openpyxl.chart import BarChart, LineChart, Reference
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
     month = request.args.get('month', datetime.now().strftime('%Y-%m'))
     year, mon = int(month.split('-')[0]), int(month.split('-')[1])
@@ -1594,10 +1594,29 @@ def report_completo():
             "FROM sale_items si JOIN sales s ON s.id=si.sale_id "
             "WHERE date(s.created_at) BETWEEN ? AND ? GROUP BY si.product_name ORDER BY qty DESC",
             (d_ini, d_fin)).fetchall()
-        ventas = conn.execute(
-            "SELECT id, date(created_at) f, strftime('%H:%M',created_at) h, payment_method m, total t "
-            "FROM sales WHERE date(created_at) BETWEEN ? AND ? ORDER BY created_at DESC",
-            (d_ini, d_fin)).fetchall()
+        # Resumen de los últimos 6 meses (incluye el mes seleccionado)
+        combos = []
+        yy, mm = year, mon
+        for _ in range(6):
+            combos.append((yy, mm)); mm -= 1
+            if mm == 0: mm = 12; yy -= 1
+        meses_data = []
+        for ay, am in reversed(combos):
+            ald = calendar.monthrange(ay, am)[1]
+            adi = f'{ay}-{am:02d}-01'; adf = f'{ay}-{am:02d}-{ald:02d}'
+            rr = conn.execute(
+                "SELECT COUNT(*) tk, COALESCE(SUM(total),0) tot, COUNT(DISTINCT date(created_at)) dcv "
+                "FROM sales WHERE date(created_at) BETWEEN ? AND ?", (adi, adf)).fetchone()
+            tk = rr['tk']; tot = rr['tot']; dcv = rr['dcv'] or 0
+            _MESES_ES = ['', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+                         'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
+            meses_data.append({
+                'mes': f'{_MESES_ES[am]} {ay}',
+                'tickets': tk, 'total': tot,
+                'ticket_val': (tot / tk) if tk else 0,
+                'tk_dia': (tk / dcv) if dcv else 0,
+                'ventas_dia': (tot / dcv) if dcv else 0,
+            })
         semanas_data = []
         for nombre, ini, fin in [('Semana 1', 1, 7), ('Semana 2', 8, 14), ('Semana 3', 15, 21),
                                  ('Semana 4', 22, 28), ('Semana 5', 29, last_day)]:
@@ -1611,8 +1630,8 @@ def report_completo():
 
     # Hoja 1 — Ventas por día + gráfico
     ws1 = wb.active; ws1.title = 'Ventas por día'
-    titulo(ws1, f'Ventas por día — {month_label}')
-    head(ws1, 3, ['Día', 'Pedidos', 'Ventas ($)'])
+    titulo(ws1, f'Nivel de ventas por día — {month_label}')
+    head(ws1, 3, ['Día', 'Tickets', 'Ingresos ($)'])
     r = 4
     for d in range(1, last_day + 1):
         ped, tot = dias.get(d, (0, 0))
@@ -1627,11 +1646,19 @@ def report_completo():
     for cc in range(1, 4):
         ws1.cell(tr, cc).fill = PatternFill('solid', fgColor=GRIS); ws1.cell(tr, cc).border = BRD
     ws1.column_dimensions['A'].width = 8; ws1.column_dimensions['B'].width = 12; ws1.column_dimensions['C'].width = 16
-    ch = BarChart(); ch.type = 'col'; ch.title = f'Ventas por día — {month_label}'
-    ch.y_axis.title = 'Ventas ($)'; ch.x_axis.title = 'Día'; ch.height = 9; ch.width = 26; ch.legend = None
-    ch.add_data(Reference(ws1, min_col=3, min_row=3, max_row=tr - 1), titles_from_data=True)
-    ch.set_categories(Reference(ws1, min_col=1, min_row=4, max_row=tr - 1))
-    ws1.add_chart(ch, 'E3')
+    bar = BarChart(); bar.type = 'col'; bar.title = f'Nivel de ventas por día — {month_label}'
+    bar.y_axis.title = 'Ingresos ($)'; bar.x_axis.title = 'Día'; bar.height = 10; bar.width = 28
+    bar.add_data(Reference(ws1, min_col=3, min_row=3, max_row=tr - 1), titles_from_data=True)
+    bar.set_categories(Reference(ws1, min_col=1, min_row=4, max_row=tr - 1))
+    linea = LineChart()
+    linea.add_data(Reference(ws1, min_col=2, min_row=3, max_row=tr - 1), titles_from_data=True)
+    linea.set_categories(Reference(ws1, min_col=1, min_row=4, max_row=tr - 1))
+    linea.y_axis.axId = 200; linea.y_axis.title = 'Tickets'
+    linea.series[0].graphicalProperties.line.solidFill = 'FC4C02'
+    linea.series[0].graphicalProperties.line.width = 28000
+    bar.y_axis.crosses = 'autoZero'; linea.y_axis.crosses = 'max'
+    bar += linea
+    ws1.add_chart(bar, 'E3')
 
     # Hoja 2 — Ventas por semana
     ws2 = wb.create_sheet('Ventas por semana')
@@ -1670,22 +1697,26 @@ def report_completo():
     if not prods: ws3.cell(4, 2, 'Sin ventas en el mes')
     for col, w in zip('ABCD', (6, 34, 12, 18)): ws3.column_dimensions[col].width = w
 
-    # Hoja 4 — Histórico de ventas
-    ws4 = wb.create_sheet('Histórico de ventas')
-    titulo(ws4, f'Histórico de ventas — {month_label}')
-    head(ws4, 3, ['Venta #', 'Fecha', 'Hora', 'Método de pago', 'Total ($)'])
+    # Hoja 4 — Últimos 6 meses (promedios)
+    ws4 = wb.create_sheet('Últimos 6 meses')
+    titulo(ws4, 'Ventas de los últimos 6 meses')
+    head(ws4, 3, ['Mes', 'Ventas totales ($)', 'Tickets', 'Ticket promedio ($)', 'Tickets prom./día', 'Ventas prom./día'])
     r = 4
-    for v in ventas:
-        ws4.cell(r, 1, v['id']).alignment = CEN
-        ws4.cell(r, 2, v['f']).alignment = CEN
-        ws4.cell(r, 3, v['h']).alignment = CEN
-        ws4.cell(r, 4, (v['m'] or '').capitalize()).alignment = CEN
-        cl = ws4.cell(r, 5, v['t'] or 0); cl.number_format = PESOS
+    for md in meses_data:
+        ws4.cell(r, 1, md['mes']).font = BOLD
+        cl = ws4.cell(r, 2, md['total']); cl.number_format = PESOS
+        ws4.cell(r, 3, md['tickets']).alignment = CEN
+        cl = ws4.cell(r, 4, round(md['ticket_val'])); cl.number_format = PESOS
+        ws4.cell(r, 5, round(md['tk_dia'], 1)).alignment = CEN
+        cl = ws4.cell(r, 6, round(md['ventas_dia'])); cl.number_format = PESOS
+        for cc in range(1, 7): ws4.cell(r, cc).border = BRD
         r += 1
-    ws4.cell(r, 4, 'TOTAL').font = BOLD; ws4.cell(r, 4).alignment = RIG
-    cl = ws4.cell(r, 5, f'=SUM(E4:E{r-1})'); cl.font = BOLD; cl.number_format = PESOS
-    for col, w in zip('ABCDE', (10, 13, 9, 16, 16)): ws4.column_dimensions[col].width = w
-    ws4.freeze_panes = 'A4'
+    for col, w in zip('ABCDEF', (16, 18, 10, 18, 16, 18)): ws4.column_dimensions[col].width = w
+    chm = BarChart(); chm.type = 'col'; chm.title = 'Ventas por mes (últimos 6 meses)'
+    chm.height = 9; chm.width = 20; chm.legend = None
+    chm.add_data(Reference(ws4, min_col=2, min_row=3, max_row=r - 1), titles_from_data=True)
+    chm.set_categories(Reference(ws4, min_col=1, min_row=4, max_row=r - 1))
+    ws4.add_chart(chm, 'H3')
 
     buf = io.BytesIO(); wb.save(buf); buf.seek(0)
     return send_file(buf, as_attachment=True, download_name=f'reporte_completo_{month}.xlsx',
